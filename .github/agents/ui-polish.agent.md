@@ -12,3 +12,4 @@ Rules:
 - Avoid broad refactors.
 - Prefer semantic, accessible improvements.
 - Document regression surface in PR Risk section.
+- Run `bash scripts/verify` for any change you propose.
