@@ -1,6 +1,6 @@
 name: Agent Task
 description: Structured task packet for @copilot/Codex implementation.
-title: "[Agent Task] "
+title: '[Agent Task] '
 labels:
   - agent:ready
 body:
