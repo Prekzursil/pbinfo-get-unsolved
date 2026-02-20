@@ -46,6 +46,11 @@ jobs:
               c.body?.includes(`- #${issue_number}:`)
             );
 
+            if (existingContract) {
+              core.info("Execution contract already exists; skipping re-queue and label mutation.");
+              return;
+            }
+
             let addedInProgress = false;
             let removedReady = false;
 
@@ -78,11 +83,6 @@ jobs:
                 }
               }
 
-              if (existingContract) {
-                core.info("Execution contract already exists; transition applied without duplicate enqueue.");
-                return;
-              }
-
               const lines = [
                 "@copilot Please implement this task using repository guardrails.",
                 "",
@@ -104,7 +104,7 @@ jobs:
                 body: lines.join("\n"),
               });
             } catch (error) {
-              core.warning(`Queue transition failed: ${error.message}`);
+              core.error(`Queue transition failed: ${error.message}`);
 
               if (addedInProgress && !hadInProgress) {
                 try {
