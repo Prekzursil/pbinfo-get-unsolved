@@ -95,7 +95,7 @@ test('runtime complexity helpers: retry target extraction accepts supported targ
   ]);
 });
 
-test('runtime complexity helpers: trust metric fallbacks cover no-target and unknown-percent branches', () => {
+test('runtime complexity helpers: trust metric fallbacks cover no-target and unknown-percent branches', function trustMetricFallbackBranches() {
   assert.equal(buildCoverageText(7, 0), '7');
   assert.equal(buildCoverageText(7, null), '7');
 
@@ -200,7 +200,7 @@ test('runtime complexity helpers: snapshot normalizers apply defensive defaults'
   });
 });
 
-test('runtime complexity helpers: pagination/id-range/sorted snapshot appliers mutate targets safely', () => {
+function assertSnapshotAppliersMutateTargetsSafely() {
   const pagination = {
     mode: 'offset',
     param: 'start',
@@ -260,6 +260,10 @@ test('runtime complexity helpers: pagination/id-range/sorted snapshot appliers m
     score: 1,
     difficulty: 0,
   });
+}
+
+test('runtime complexity helpers: pagination/id-range/sorted snapshot appliers mutate targets safely', function paginationAndSnapshotApplierBranches() {
+  assertSnapshotAppliersMutateTargetsSafely();
 });
 
 test('runtime complexity helpers: runtime config builder keeps defaults and coercions stable', () => {
@@ -354,7 +358,7 @@ test('runtime complexity helpers: page/score response classifiers cover primary 
   );
 });
 
-test('runtime complexity helpers: response and request helpers cover defensive branches', () => {
+test('runtime complexity helpers: response and request helpers cover defensive branches', function responseAndRequestHelperDefensiveBranches() {
   assert.equal(buildIdRangeScoreBatchRequest({ batchStart: Number.NaN, size: 3, endId: 30 }), null);
   assert.equal(buildIdRangeScoreBatchRequest({ batchStart: 10, size: 3, endId: Number.NaN }), null);
   assert.equal(buildIdRangeScoreBatchRequest({ batchStart: 10, size: -1, endId: 30 }), null);
@@ -574,240 +578,239 @@ test('runtime complexity helpers: persistence snapshot appliers handle invalid a
   );
 });
 
-test('runtime complexity helpers: runtime-state-restore rehydrates and applies snapshot payload', () => {
-  const activeRequests = new Set([
-    { abort() {} },
+const RUNTIME_REHYDRATE_MIGRATED_SNAPSHOT = {
+  stopRequested: true,
+  paused: true,
+  end: { finished: false },
+  pagination: { mode: 'page', param: 'p', pageBase: 2 },
+  idRange: {
+    startId: 11,
+    endId: 22,
+    stopAfterMissing: 2,
+    scoreBatch: { enabled: false, size: 3 },
+  },
+  scanStartPage: 4,
+  elapsedMs: 200,
+  pageSize: 25,
+  totalProblems: 100,
+  totalPages: 10,
+  stats: { solved: 1, tried: 2, unattempted: 3, total: 6, pages: 7, missing: 8, forbidden: 9 },
+  problems: [
     {
-      abort() {
-        throw new Error('abort failed');
-      },
+      id: 7,
+      name: 'P7',
+      link: '/p7',
+      difficulty: 1,
+      status: 'tried',
+      userScore: 30,
+      maxScore: 100,
     },
-    { abort: null },
-  ]);
-  const activePageIndexes = new Set([1, 2]);
-  let inFlight = 7;
-  let stopRequested = false;
-  let paused = false;
-  let scanEnd = null;
-  let startedAt = 0;
-  let pageSize = 10;
-  let totalProblems = 0;
-  let totalPages = 0;
-  let queueInitialized = false;
-  let nextSequentialPage = null;
-  let finished = false;
-  const config = {
-    pagination: { mode: 'offset', param: 'start', pageBase: 1 },
-    idRange: {
-      startId: 1,
-      endId: 100,
-      stopAfterMissing: 0,
-      scoreBatch: { enabled: true, size: 5 },
-    },
-    cache: { enabled: true, ttlMs: 1000, forceRefresh: false },
-    startPage: 1,
-  };
-  const stats = {};
-  const allProblems = [];
-  const seenProblemIds = new Set();
-  const outcomeLedger = { entries: { stale: { status: 'timeout' } } };
-  const verificationState = {};
-  const filterState = {
-    statuses: new Set(['solved']),
-    qualities: new Set(['all']),
-    includeUnknownScore: false,
-    scoreMin: null,
-    scoreMax: null,
-    searchQuery: '',
-  };
-  const sorted = { id: 0, score: 0, difficulty: 0 };
-  const pageQueue = [999];
-  const deferredPageRequests = new Map([[999, 3]]);
-  const deferredCalls = [];
-  let setupControlsCalls = 0;
-  let ensured = 0;
-  let rendered = 0;
-  let progressArg = null;
-  const logs = [];
-  const pauseButton = { textContent: '', disabled: false };
-  const stopButton = { disabled: false };
-  let refreshCacheCalls = 0;
+  ],
+  seenProblemIds: [7, '8'],
+  outcomes: [{ targetType: 'list-page', targetKey: 3, status: 'timeout' }],
+  verification: { enabled: true, completed: true, attempted: 2, verifiedUnsolved: 1 },
+  cachePolicy: { enabled: false, ttlMs: 5000, forceRefresh: true },
+  filters: {
+    statuses: ['solved'],
+    qualities: ['verified'],
+    includeUnknownScore: true,
+    scoreMin: 1,
+    scoreMax: 99,
+    searchQuery: 'abc',
+  },
+  sorted: { id: 1, score: -1, difficulty: 2 },
+  queueInitialized: true,
+  pageQueue: [10, 'bad'],
+  deferred: [
+    [12, 1],
+    ['x', 9],
+  ],
+  nextSequentialPage: 13,
+  inFlightPages: [14],
+  storageLevel: 'progress',
+};
 
-  const migrated = {
-    stopRequested: true,
-    paused: true,
-    end: { finished: false },
-    pagination: { mode: 'page', param: 'p', pageBase: 2 },
-    idRange: {
-      startId: 11,
-      endId: 22,
-      stopAfterMissing: 2,
-      scoreBatch: { enabled: false, size: 3 },
+function cloneRuntimeRehydrateSnapshot() {
+  return JSON.parse(JSON.stringify(RUNTIME_REHYDRATE_MIGRATED_SNAPSHOT));
+}
+
+function createRuntimeRehydrateMutableState() {
+  return {
+    inFlight: 7,
+    stopRequested: false,
+    paused: false,
+    scanEnd: null,
+    startedAt: 0,
+    pageSize: 10,
+    totalProblems: 0,
+    totalPages: 0,
+    queueInitialized: false,
+    nextSequentialPage: null,
+    finished: false,
+    setupControlsCalls: 0,
+    ensured: 0,
+    rendered: 0,
+    progressArg: null,
+    refreshCacheCalls: 0,
+  };
+}
+
+function createRuntimeRehydrateCollections() {
+  return {
+    stats: {},
+    allProblems: [],
+    seenProblemIds: new Set(),
+    outcomeLedger: { entries: { stale: { status: 'timeout' } } },
+    verificationState: {},
+    filterState: {
+      statuses: new Set(['solved']),
+      qualities: new Set(['all']),
+      includeUnknownScore: false,
+      scoreMin: null,
+      scoreMax: null,
+      searchQuery: '',
     },
-    scanStartPage: 4,
-    elapsedMs: 200,
-    pageSize: 25,
-    totalProblems: 100,
-    totalPages: 10,
-    stats: { solved: 1, tried: 2, unattempted: 3, total: 6, pages: 7, missing: 8, forbidden: 9 },
-    problems: [
+    sorted: { id: 0, score: 0, difficulty: 0 },
+    pageQueue: [999],
+    deferredPageRequests: new Map([[999, 3]]),
+    deferredCalls: [],
+    logs: [],
+    pauseButton: { textContent: '', disabled: false },
+    stopButton: { disabled: false },
+  };
+}
+
+function createRuntimeRehydrateHarness() {
+  return {
+    activeRequests: new Set([
+      { abort() {} },
       {
-        id: 7,
-        name: 'P7',
-        link: '/p7',
-        difficulty: 1,
-        status: 'tried',
-        userScore: 30,
-        maxScore: 100,
+        abort() {
+          throw new Error('abort failed');
+        },
       },
-    ],
-    seenProblemIds: [7, '8'],
-    outcomes: [{ targetType: 'list-page', targetKey: 3, status: 'timeout' }],
-    verification: { enabled: true, completed: true, attempted: 2, verifiedUnsolved: 1 },
-    cachePolicy: { enabled: false, ttlMs: 5000, forceRefresh: true },
-    filters: {
-      statuses: ['solved'],
-      qualities: ['verified'],
-      includeUnknownScore: true,
-      scoreMin: 1,
-      scoreMax: 99,
-      searchQuery: 'abc',
+      { abort: null },
+    ]),
+    activePageIndexes: new Set([1, 2]),
+    state: createRuntimeRehydrateMutableState(),
+    config: {
+      pagination: { mode: 'offset', param: 'start', pageBase: 1 },
+      idRange: {
+        startId: 1,
+        endId: 100,
+        stopAfterMissing: 0,
+        scoreBatch: { enabled: true, size: 5 },
+      },
+      cache: { enabled: true, ttlMs: 1000, forceRefresh: false },
+      startPage: 1,
     },
-    sorted: { id: 1, score: -1, difficulty: 2 },
-    queueInitialized: true,
-    pageQueue: [10, 'bad'],
-    deferred: [
-      [12, 1],
-      ['x', 9],
-    ],
-    nextSequentialPage: 13,
-    inFlightPages: [14],
-    storageLevel: 'progress',
+    ...createRuntimeRehydrateCollections(),
+  };
+}
+
+function buildRuntimeRehydrateRestoreArgs(harness) {
+  const { state, deferredCalls, logs } = harness;
+  const setState = (key) => (value) => {
+    state[key] = value;
   };
 
-  const restored = restoreRuntimeSnapshotState({
-    migrated,
+  return {
+    migrated: cloneRuntimeRehydrateSnapshot(),
     kind: 'minimal',
     scanMode: 'id-range',
-    activeRequests,
-    activePageIndexes,
-    setInFlight(value) {
-      inFlight = value;
+    activeRequests: harness.activeRequests,
+    activePageIndexes: harness.activePageIndexes,
+    config: harness.config,
+    stats: harness.stats,
+    allProblems: harness.allProblems,
+    seenProblemIds: harness.seenProblemIds,
+    outcomeLedger: harness.outcomeLedger,
+    verificationState: harness.verificationState,
+    filterState: harness.filterState,
+    sorted: harness.sorted,
+    pageQueue: harness.pageQueue,
+    deferredPageRequests: harness.deferredPageRequests,
+    pauseButton: harness.pauseButton,
+    stopButton: harness.stopButton,
+    setInFlight: setState('inFlight'),
+    setStopRequested: setState('stopRequested'),
+    setPaused: setState('paused'),
+    setScanEnd: setState('scanEnd'),
+    setStartedAt: setState('startedAt'),
+    getPageSize: () => state.pageSize,
+    setPageSize: setState('pageSize'),
+    getTotalProblems: () => state.totalProblems,
+    setTotalProblems: setState('totalProblems'),
+    getTotalPages: () => state.totalPages,
+    setTotalPages: setState('totalPages'),
+    refreshParsedCacheAvailability: () => {
+      state.refreshCacheCalls += 1;
     },
-    setStopRequested(value) {
-      stopRequested = value;
+    setQueueInitialized: setState('queueInitialized'),
+    setNextSequentialPage: setState('nextSequentialPage'),
+    deferPage: (pageIndex, retryCount) => deferredCalls.push([pageIndex, retryCount]),
+    setFinished: setState('finished'),
+    setupControls: () => {
+      state.setupControlsCalls += 1;
     },
-    setPaused(value) {
-      paused = value;
+    ensureResultsAttached: () => {
+      state.ensured += 1;
     },
-    setScanEnd(value) {
-      scanEnd = value;
+    renderResults: () => {
+      state.rendered += 1;
     },
-    config,
-    setStartedAt(value) {
-      startedAt = value;
-    },
-    getPageSize() {
-      return pageSize;
-    },
-    setPageSize(value) {
-      pageSize = value;
-    },
-    getTotalProblems() {
-      return totalProblems;
-    },
-    setTotalProblems(value) {
-      totalProblems = value;
-    },
-    getTotalPages() {
-      return totalPages;
-    },
-    setTotalPages(value) {
-      totalPages = value;
-    },
-    stats,
-    allProblems,
-    seenProblemIds,
-    outcomeLedger,
-    verificationState,
-    refreshParsedCacheAvailability() {
-      refreshCacheCalls += 1;
-    },
-    filterState,
-    sorted,
-    pageQueue,
-    deferredPageRequests,
-    setQueueInitialized(value) {
-      queueInitialized = value;
-    },
-    setNextSequentialPage(value) {
-      nextSequentialPage = value;
-    },
-    deferPage(pageIndex, retryCount) {
-      deferredCalls.push([pageIndex, retryCount]);
-    },
-    setFinished(value) {
-      finished = value;
-    },
-    setupControls() {
-      setupControlsCalls += 1;
-    },
-    pauseButton,
-    stopButton,
-    ensureResultsAttached() {
-      ensured += 1;
-    },
-    renderResults() {
-      rendered += 1;
-    },
-    getInFlight() {
-      return inFlight;
-    },
-    updateProgress(value) {
-      progressArg = value;
-    },
-    addLog(message) {
-      logs.push(message);
-    },
-  });
+    getInFlight: () => state.inFlight,
+    updateProgress: setState('progressArg'),
+    addLog: (message) => logs.push(message),
+  };
+}
+
+function assertRuntimeRehydrateResult(harness, restored) {
+  const { state } = harness;
 
   assert.equal(restored, true);
-  assert.equal(activeRequests.size, 0);
-  assert.equal(activePageIndexes.size, 0);
-  assert.equal(inFlight, 0);
-  assert.equal(stopRequested, true);
-  assert.equal(paused, true);
-  assert.deepEqual(scanEnd, { finished: false });
-  assert.equal(config.pagination.mode, 'page');
-  assert.equal(config.idRange.startId, 11);
-  assert.equal(config.startPage, 4);
-  assert.ok(Number.isFinite(startedAt));
-  assert.equal(pageSize, 25);
-  assert.equal(totalProblems, 100);
-  assert.equal(totalPages, 10);
-  assert.equal(stats.total, 6);
-  assert.equal(allProblems.length, 1);
-  assert.ok(seenProblemIds.has(7));
-  assert.ok(seenProblemIds.has(8));
-  assert.equal(refreshCacheCalls, 1);
-  assert.deepEqual([...filterState.statuses], ['solved']);
-  assert.deepEqual([...filterState.qualities], ['verified']);
-  assert.equal(queueInitialized, true);
-  assert.deepEqual(pageQueue, [10]);
-  assert.equal(deferredPageRequests.get(12), 1);
-  assert.equal(nextSequentialPage, 13);
-  assert.deepEqual(deferredCalls, [[14, 0]]);
-  assert.equal(setupControlsCalls, 1);
-  assert.equal(pauseButton.textContent, 'Continuă');
-  assert.equal(stopButton.disabled, false);
-  assert.equal(ensured, 1);
-  assert.equal(rendered, 1);
-  assert.equal(progressArg, 0);
-  assert.equal(finished, false);
-  assert.equal(logs.length, 1);
+  assert.equal(harness.activeRequests.size, 0);
+  assert.equal(harness.activePageIndexes.size, 0);
+  assert.equal(state.inFlight, 0);
+  assert.equal(state.stopRequested, true);
+  assert.equal(state.paused, true);
+  assert.deepEqual(state.scanEnd, { finished: false });
+  assert.equal(harness.config.pagination.mode, 'page');
+  assert.equal(harness.config.idRange.startId, 11);
+  assert.equal(harness.config.startPage, 4);
+  assert.ok(Number.isFinite(state.startedAt));
+  assert.equal(state.pageSize, 25);
+  assert.equal(state.totalProblems, 100);
+  assert.equal(state.totalPages, 10);
+  assert.equal(harness.stats.total, 6);
+  assert.equal(harness.allProblems.length, 1);
+  assert.ok(harness.seenProblemIds.has(7));
+  assert.ok(harness.seenProblemIds.has(8));
+  assert.equal(state.refreshCacheCalls, 1);
+  assert.deepEqual([...harness.filterState.statuses], ['solved']);
+  assert.deepEqual([...harness.filterState.qualities], ['verified']);
+  assert.equal(state.queueInitialized, true);
+  assert.deepEqual(harness.pageQueue, [10]);
+  assert.equal(harness.deferredPageRequests.get(12), 1);
+  assert.equal(state.nextSequentialPage, 13);
+  assert.deepEqual(harness.deferredCalls, [[14, 0]]);
+  assert.equal(state.setupControlsCalls, 1);
+  assert.equal(harness.pauseButton.textContent, 'Continuă');
+  assert.equal(harness.stopButton.disabled, false);
+  assert.equal(state.ensured, 1);
+  assert.equal(state.rendered, 1);
+  assert.equal(state.progressArg, 0);
+  assert.equal(state.finished, false);
+  assert.equal(harness.logs.length, 1);
+}
+
+test('runtime complexity helpers: runtime-state-restore rehydrates and applies snapshot payload', function runtimeStateRestoreRehydratesSnapshotPayload() {
+  const harness = createRuntimeRehydrateHarness();
+  const restored = restoreRuntimeSnapshotState(buildRuntimeRehydrateRestoreArgs(harness));
+  assertRuntimeRehydrateResult(harness, restored);
 });
 
-test('runtime complexity helpers: runtime-state-restore logs compact note for minimal snapshots', () => {
+test('runtime complexity helpers: runtime-state-restore logs compact note for minimal snapshots', function runtimeStateRestoreLogsCompactMinimalSnapshotNote() {
   const logs = [];
   restoreRuntimeSnapshotState({
     migrated: {
@@ -885,7 +888,7 @@ test('runtime complexity helpers: runtime-state-restore logs compact note for mi
   assert.match(logs[0], /compact/);
 });
 
-test('runtime complexity helpers: runtime-state-restore fallback branches keep defaults and resume cursor', () => {
+test('runtime complexity helpers: runtime-state-restore fallback branches keep defaults and resume cursor', function runtimeStateRestoreFallbackBranchesKeepDefaults() {
   let scanEnd = 'unset';
   let pageSize = 10;
   let totalProblems = 20;

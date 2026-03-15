@@ -116,49 +116,55 @@ async function withGlobalLocalStorage(localStorageApi, callback) {
   }
 }
 
-test('runtime storage refactor coverage: defaults and resolver fallbacks stay explicit', () => {
-  const config = createConfig({ startPage: 0 });
-  const defaults = buildSetupWizardDefaults({
-    setupDefaults: [],
-    modeFromWindow: '',
-    defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
-    config,
-  });
-  const resolvedList = resolveSetupWizardResult({
-    mode: 'list',
-    sourceMode: 'current',
-    defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
-    urlInputValue: '',
-    rangeInputValue: '',
-    startInputValue: '',
-    speedPresetValue: 'safe',
-    concurrencyInputValue: '0',
-    delayInputValue: '-5',
-    verifyUnsolved: false,
-    forceRefresh: false,
-    resumeSavedState: true,
-    config,
-    locationRef: {},
-  });
-  const resolvedRange = resolveSetupWizardResult({
-    mode: 'id-range',
-    sourceMode: 'current',
-    defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
-    urlInputValue: '',
-    rangeInputValue: '',
-    startInputValue: '',
-    speedPresetValue: '',
-    concurrencyInputValue: '',
-    delayInputValue: '',
-    verifyUnsolved: false,
-    forceRefresh: false,
-    resumeSavedState: false,
-    config,
-    locationRef: {},
-  });
+function getDefaultListLink() {
+  return 'https://www.pbinfo.ro/?pagina=probleme-lista';
+}
 
+function buildResolverFallbackScenario() {
+  const config = createConfig({ startPage: 0 });
+  const defaultLink = getDefaultListLink();
+  const baseResolverInput = {
+    sourceMode: 'current',
+    defaultLink,
+    urlInputValue: '',
+    rangeInputValue: '',
+    startInputValue: '',
+    verifyUnsolved: false,
+    forceRefresh: false,
+    config,
+    locationRef: {},
+  };
+
+  return {
+    defaultLink,
+    defaults: buildSetupWizardDefaults({
+      setupDefaults: [],
+      modeFromWindow: '',
+      defaultLink,
+      config,
+    }),
+    resolvedList: resolveSetupWizardResult({
+      ...baseResolverInput,
+      mode: 'list',
+      speedPresetValue: 'safe',
+      concurrencyInputValue: '0',
+      delayInputValue: '-5',
+      resumeSavedState: true,
+    }),
+    resolvedRange: resolveSetupWizardResult({
+      ...baseResolverInput,
+      mode: 'id-range',
+      speedPresetValue: '',
+      concurrencyInputValue: '',
+      delayInputValue: '',
+      resumeSavedState: false,
+    }),
+  };
+}
+
+function assertResolverFallbackScenario({ defaultLink, defaults, resolvedList, resolvedRange }) {
   assert.equal(defaults.scanMode, 'list');
-  assert.equal(defaults.pageLink, 'https://www.pbinfo.ro/?pagina=probleme-lista');
+  assert.equal(defaults.pageLink, defaultLink);
   assert.equal(defaults.idRange, '10-20');
   assert.equal(defaults.startPage, 0);
   assert.equal(
@@ -167,20 +173,58 @@ test('runtime storage refactor coverage: defaults and resolver fallbacks stay ex
   );
 
   assert.equal(resolvedList.ok, true);
-  assert.equal(resolvedList.result.pageLink, 'https://www.pbinfo.ro/?pagina=probleme-lista');
+  assert.equal(resolvedList.result.pageLink, defaultLink);
   assert.equal(resolvedList.result.startPage, 1);
   assert.equal(resolvedList.result.concurrency, 1);
   assert.equal(resolvedList.result.delayMs, 0);
   assert.equal(resolvedList.result.sourceMode, 'current');
   assert.equal(resolvedRange.ok, true);
   assert.equal(resolvedRange.result.pageLink, 'id-range:https://www.pbinfo.ro:10-20');
-  assert.equal(
-    resolvedRange.rememberedPreferences.pageLink,
-    'https://www.pbinfo.ro/?pagina=probleme-lista'
-  );
-});
+  assert.equal(resolvedRange.rememberedPreferences.pageLink, defaultLink);
+}
 
-test('runtime storage refactor coverage: wizard populates id-range and custom-source states', async () => {
+function querySetupWizardElements(document) {
+  return {
+    modeSelect: document.querySelector('[data-role="setup-mode"]'),
+    sourceSelect: document.querySelector('[data-role="setup-source"]'),
+    urlInput: document.querySelector('[data-role="setup-url"]'),
+    rangeInput: document.querySelector('[data-role="setup-range"]'),
+    startInput: document.querySelector('[data-role="setup-start"]'),
+    speedSelect: document.querySelector('[data-role="setup-speed"]'),
+    summary: document.querySelector('[data-role="setup-summary"]'),
+  };
+}
+
+function selectOption(select, index, window) {
+  select.options[index].selected = true;
+  select.dispatchEvent(new window.Event('change'));
+}
+
+function assertWizardInitialVisibility({ urlInput, rangeInput, startInput, summary }) {
+  assert.equal(urlInput.parentElement.style.display, 'none');
+  assert.equal(rangeInput.parentElement.style.display, 'none');
+  assert.equal(startInput.value, '3');
+  assert.match(summary.textContent, /pagina curentă/);
+}
+
+function assertWizardModeAndSourceToggles(elements, window) {
+  const { modeSelect, sourceSelect, urlInput, rangeInput, speedSelect, summary } = elements;
+
+  selectOption(modeSelect, 1, window);
+  assert.equal(rangeInput.parentElement.style.display, '');
+  assert.match(summary.textContent, /intervalul 10-20/);
+
+  selectOption(modeSelect, 0, window);
+  selectOption(sourceSelect, 0, window);
+  assert.equal(urlInput.parentElement.style.display, 'none');
+
+  selectOption(sourceSelect, 1, window);
+  assert.equal(urlInput.parentElement.style.display, '');
+  selectOption(speedSelect, 0, window);
+  assert.match(summary.textContent, /link-ul furnizat/);
+}
+
+async function runWizardIdRangeAndCustomSourceScenario() {
   const { document, window } = parseHTML('<html><body></body></html>');
   const localStorageApi = createLocalStorage();
   const config = createConfig();
@@ -197,46 +241,28 @@ test('runtime storage refactor coverage: wizard populates id-range and custom-so
       resumeSavedState: false,
     },
     modeFromWindow: '',
-    defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
+    defaultLink: getDefaultListLink(),
     config,
   });
   const promise = showSetupWizard(
     createOverlayWizardOptions(config, defaults, document, localStorageApi)
   );
+  const elements = querySetupWizardElements(document);
 
-  const modeSelect = document.querySelector('[data-role="setup-mode"]');
-  const sourceSelect = document.querySelector('[data-role="setup-source"]');
-  const urlInput = document.querySelector('[data-role="setup-url"]');
-  const rangeInput = document.querySelector('[data-role="setup-range"]');
-  const startInput = document.querySelector('[data-role="setup-start"]');
-  const speedSelect = document.querySelector('[data-role="setup-speed"]');
-  const summary = document.querySelector('[data-role="setup-summary"]');
-
-  assert.equal(urlInput.parentElement.style.display, 'none');
-  assert.equal(rangeInput.parentElement.style.display, 'none');
-  assert.equal(startInput.value, '3');
-  assert.match(summary.textContent, /pagina curentă/);
-
-  modeSelect.options[1].selected = true;
-  modeSelect.dispatchEvent(new window.Event('change'));
-  assert.equal(rangeInput.parentElement.style.display, '');
-  assert.match(summary.textContent, /intervalul 10-20/);
-
-  modeSelect.options[0].selected = true;
-  modeSelect.dispatchEvent(new window.Event('change'));
-  sourceSelect.options[0].selected = true;
-  sourceSelect.dispatchEvent(new window.Event('change'));
-  assert.equal(urlInput.parentElement.style.display, 'none');
-  sourceSelect.options[1].selected = true;
-  sourceSelect.dispatchEvent(new window.Event('change'));
-  assert.equal(urlInput.parentElement.style.display, '');
-  speedSelect.options[0].selected = true;
-  speedSelect.dispatchEvent(new window.Event('change'));
-  assert.match(summary.textContent, /link-ul furnizat/);
+  assertWizardInitialVisibility(elements);
+  assertWizardModeAndSourceToggles(elements, window);
 
   document.querySelector('[data-role="setup-cancel"]').click();
   assert.equal(await promise, null);
   assert.equal(localStorageApi.dump()['pbinfo-get-unsolved:setup-prefs'], undefined);
+}
+
+test('runtime storage refactor coverage: defaults and resolver fallbacks stay explicit', function defaultsAndResolverFallbacksStayExplicit() {
+  assertResolverFallbackScenario(buildResolverFallbackScenario());
+});
+
+test('runtime storage refactor coverage: wizard populates id-range and custom-source states', async function wizardPopulatesIdRangeAndCustomSourceStates() {
+  await runWizardIdRangeAndCustomSourceScenario();
 });
 
 test('runtime storage refactor coverage: indexeddb bootstrap covers null backends and scalar hydration keys', async () => {
@@ -287,7 +313,7 @@ test('runtime storage refactor coverage: indexeddb bootstrap covers null backend
   assert.deepEqual(hydratedStorage.storageGetJson('scan-key'), { savedAt: 1 });
 });
 
-test('runtime storage refactor coverage: wizard honors explicit defaults and custom indexeddb config', async () => {
+test('runtime storage refactor coverage: wizard honors explicit defaults and custom indexeddb config', async function wizardHonorsExplicitDefaultsAndCustomIndexedDbConfig() {
   const recordedOpenCalls = [];
   const { document, window } = parseHTML('<html><body></body></html>');
   const globalStorage = createLocalStorage();

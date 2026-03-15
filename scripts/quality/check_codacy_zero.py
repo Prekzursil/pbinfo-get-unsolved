@@ -324,38 +324,50 @@ def _poll_branch_zero_gate(
         return "fail", open_issues, selected_branch, analysed_sha, findings
 
 
+def _build_backlog_findings(open_issues: int | None) -> list[str]:
+    if open_issues is None:
+        return ["Codacy response did not include a parseable total issue count."]
+    if open_issues != 0:
+        return [f"Codacy reports {open_issues} open issues (expected 0)."]
+    return []
+
+
+def _query_backlog_provider(
+    *, api_base: str, token: str, provider: str, owner: str, repo: str
+) -> tuple[bool, bool, int | None, list[str], Exception | None]:
+    url = _build_backlog_url(api_base, provider, owner, repo)
+    try:
+        payload = _request_json(url, token, method="POST", data={})
+        open_issues = extract_total_open(payload)
+        findings = _build_backlog_findings(open_issues)
+        return not findings, False, open_issues, findings, None
+    except HttpsStatusError as exc:
+        if exc.status_code == 404:
+            return False, True, None, [], exc
+        return False, False, None, [f"Codacy API request failed: HTTP {exc.status_code}"], exc
+    except Exception as exc:  # pragma: no cover - network/runtime surface
+        return False, False, None, [f"Codacy API request failed: {exc}"], exc
+
+
 def _check_repository_backlog_zero(
     *, api_base: str, token: str, providers: list[str], owner: str, repo: str
 ) -> tuple[str, int | None, list[str]]:
     last_exc: Exception | None = None
-    findings: list[str] = []
-    open_issues: int | None = None
 
     for provider in providers:
-        url = _build_backlog_url(api_base, provider, owner, repo)
-        try:
-            payload = _request_json(url, token, method="POST", data={})
-            open_issues = extract_total_open(payload)
-            if open_issues is None:
-                findings.append("Codacy response did not include a parseable total issue count.")
-            elif open_issues != 0:
-                findings.append(f"Codacy reports {open_issues} open issues (expected 0).")
-            return ("pass" if not findings else "fail"), open_issues, findings
-        except HttpsStatusError as exc:
-            last_exc = exc
-            if exc.status_code == 404:
-                continue
-            findings.append(f"Codacy API request failed: HTTP {exc.status_code}")
-            return "fail", open_issues, findings
-        except Exception as exc:  # pragma: no cover - network/runtime surface
-            last_exc = exc
-            findings.append(f"Codacy API request failed: {exc}")
-            return "fail", open_issues, findings
+        provider_passed, provider_not_found, open_issues, findings, provider_error = _query_backlog_provider(
+            api_base=api_base,
+            token=token,
+            provider=provider,
+            owner=owner,
+            repo=repo,
+        )
+        last_exc = provider_error
+        if provider_not_found:
+            continue
+        return ("pass" if provider_passed else "fail"), open_issues, findings
 
-    findings.append(f"Codacy API endpoint was not found for provider(s): {', '.join(providers)}.")
-    if last_exc is not None:
-        findings.append(f"Last Codacy API error: {last_exc}")
-    return "fail", open_issues, findings
+    return "fail", None, _build_missing_provider_findings(providers, last_exc)
 
 
 def main() -> int:

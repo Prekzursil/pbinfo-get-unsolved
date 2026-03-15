@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ import absolute_import
 
 import ipaddress
 import json
@@ -15,6 +15,72 @@ class HttpsStatusError(RuntimeError):
         self.status_code = status_code
         self.reason = reason
         self.body = body
+
+
+_LOCALHOST_ALIASES = {"localhost", "localhost.localdomain"}
+_DISALLOWED_IP_FLAGS = (
+    "is_private",
+    "is_loopback",
+    "is_link_local",
+    "is_reserved",
+    "is_multicast",
+)
+
+
+def _normalize_hostname(raw_hostname: str) -> str:
+    return (raw_hostname or "").lower().strip(".")
+
+
+def _normalize_allowlist(values: Optional[Set[str]]) -> Set[str]:
+    if not values:
+        return set()
+    return {_normalize_hostname(value) for value in values if str(value or "").strip(".")}
+
+
+def _assert_https_basics(parsed_url: Any, raw_url: str) -> None:
+    if parsed_url.scheme != "https":
+        raise ValueError(f"Only https URLs are allowed: {raw_url!r}")
+    if not parsed_url.hostname:
+        raise ValueError(f"URL is missing a hostname: {raw_url!r}")
+    if parsed_url.username or parsed_url.password:
+        raise ValueError(f"URL credentials are not allowed: {raw_url!r}")
+
+
+def _assert_hostname_allowlists(
+    hostname: str,
+    *,
+    allowed_hosts: Optional[Set[str]],
+    allowed_host_suffixes: Optional[Set[str]],
+) -> None:
+    hosts = _normalize_allowlist(allowed_hosts)
+    suffixes = _normalize_allowlist(allowed_host_suffixes)
+
+    if hosts and hostname not in hosts:
+        raise ValueError(f"URL host is not in allowlist: {hostname}")
+
+    if suffixes and not any(hostname == suffix or hostname.endswith(f".{suffix}") for suffix in suffixes):
+        raise ValueError(f"URL host is not in suffix allowlist: {hostname}")
+
+
+def _parse_ip_or_none(hostname: str) -> Any:
+    try:
+        return ipaddress.ip_address(hostname)
+    except ValueError:
+        return None
+
+
+def _attribute_truthy(value: Any, attribute: str) -> bool:
+    attr_value = getattr(value, attribute, False)
+    if callable(attr_value):
+        try:
+            return bool(attr_value())
+        except TypeError:
+            return bool(attr_value)
+    return bool(attr_value)
+
+
+def _is_disallowed_ip(ip_value: Any) -> bool:
+    return any(_attribute_truthy(ip_value, attr_name) for attr_name in _DISALLOWED_IP_FLAGS)
 
 
 def normalize_https_url(
@@ -35,36 +101,20 @@ def normalize_https_url(
     """
 
     parsed = urlparse((raw_url or "").strip())
-    if parsed.scheme != "https":
-        raise ValueError(f"Only https URLs are allowed: {raw_url!r}")
-    if not parsed.hostname:
-        raise ValueError(f"URL is missing a hostname: {raw_url!r}")
-    if parsed.username or parsed.password:
-        raise ValueError(f"URL credentials are not allowed: {raw_url!r}")
+    _assert_https_basics(parsed, raw_url)
 
-    hostname = parsed.hostname.lower().strip(".")
-    if allowed_hosts is not None and hostname not in {host.lower().strip(".") for host in allowed_hosts}:
-        raise ValueError(f"URL host is not in allowlist: {hostname}")
-    if allowed_host_suffixes is not None:
-        suffixes = {suffix.lower().strip(".") for suffix in allowed_host_suffixes if suffix.strip(".")}
-        if suffixes and not any(hostname == suffix or hostname.endswith(f".{suffix}") for suffix in suffixes):
-            raise ValueError(f"URL host is not in suffix allowlist: {hostname}")
+    hostname = _normalize_hostname(parsed.hostname or "")
+    _assert_hostname_allowlists(
+        hostname,
+        allowed_hosts=allowed_hosts,
+        allowed_host_suffixes=allowed_host_suffixes,
+    )
 
-    try:
-        ip_value = ipaddress.ip_address(hostname)
-    except ValueError:
-        ip_value = None
-
-    if ip_value is not None and (
-        ip_value.is_private
-        or ip_value.is_loopback
-        or ip_value.is_link_local
-        or ip_value.is_reserved
-        or ip_value.is_multicast
-    ):
+    ip_value = _parse_ip_or_none(hostname)
+    if ip_value is not None and _is_disallowed_ip(ip_value):
         raise ValueError(f"Private or local addresses are not allowed: {hostname}")
 
-    if hostname in {"localhost", "localhost.localdomain"}:
+    if hostname in _LOCALHOST_ALIASES:
         raise ValueError("Localhost URLs are not allowed.")
 
     sanitized = parsed._replace(fragment="", params="")

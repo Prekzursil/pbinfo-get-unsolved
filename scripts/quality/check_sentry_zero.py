@@ -24,9 +24,11 @@ _security_helpers = _load_security_helpers()
 normalize_https_url = _security_helpers.normalize_https_url
 request_json = _security_helpers.request_json
 request_json_with_headers = _security_helpers.request_json_with_headers
+HttpsStatusError = _security_helpers.HttpsStatusError
 
 SENTRY_API_BASE = "https://sentry.io/api/0"
 SENTRY_HOST_SUFFIX = "sentry.io"
+RECOVERABLE_SENTRY_ERRORS = (HttpsStatusError, RuntimeError, ValueError)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -172,7 +174,7 @@ def main() -> int:
             project_ids_by_slug = {}
             try:
                 available_projects = _request_projects(api_base, org_slug, token)
-            except Exception:
+            except RECOVERABLE_SENTRY_ERRORS:
                 available_projects = []
 
             for item in available_projects:
@@ -197,7 +199,7 @@ def main() -> int:
                     url = f"{api_base}/organizations/{org_slug}/issues/?{query}"
                     try:
                         issues, headers = _request(url, token)
-                    except Exception:
+                    except RECOVERABLE_SENTRY_ERRORS:
                         issues = None
                         headers = None
 
@@ -216,7 +218,7 @@ def main() -> int:
                 project_results.append({"project": project, "unresolved": unresolved})
 
             status = "pass" if not findings else "fail"
-        except Exception as exc:  # pragma: no cover - network/runtime surface
+        except RECOVERABLE_SENTRY_ERRORS as exc:  # pragma: no cover - network/runtime surface
             findings.append(f"Sentry API request failed: {exc}")
             status = "fail"
 

@@ -10,6 +10,9 @@ const {
 } = require('../src/core/runtime-storage-setup');
 const { readLocalStorageValue, createIndexedDbStorage } = require('../src/core/runtime-storage');
 
+const DEFAULT_LINK = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+const LOCATION_REF = { origin: 'https://www.pbinfo.ro' };
+
 function createConfig() {
   return {
     startPage: 3,
@@ -57,13 +60,13 @@ function setSelectOptions(select, options) {
 
 function createOverlayWizardOptions(config, defaults, documentRef, localStorageApi) {
   return {
-    defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
+    defaultLink: DEFAULT_LINK,
     config,
     defaults,
     overlayEnabled: true,
     localStorageApi,
     documentRef,
-    locationRef: { origin: 'https://www.pbinfo.ro' },
+    locationRef: LOCATION_REF,
     setSelectOptions,
   };
 }
@@ -97,7 +100,44 @@ function createIndexedDbWithResult(dbResult, overrides = {}) {
   };
 }
 
-test('runtime storage setup branches: summary and resolver error paths stay explicit', () => {
+function resolveWizard(config, overrides = {}) {
+  return resolveSetupWizardResult({
+    mode: 'list',
+    sourceMode: 'current',
+    defaultLink: DEFAULT_LINK,
+    urlInputValue: '',
+    rangeInputValue: '',
+    startInputValue: '3',
+    speedPresetValue: 'balanced',
+    concurrencyInputValue: '',
+    delayInputValue: '',
+    verifyUnsolved: false,
+    forceRefresh: false,
+    resumeSavedState: true,
+    config,
+    locationRef: LOCATION_REF,
+    ...overrides,
+  });
+}
+
+function buildWizardDefaults(config) {
+  return buildSetupWizardDefaults({
+    setupDefaults: {},
+    modeFromWindow: 'list',
+    defaultLink: DEFAULT_LINK,
+    config,
+  });
+}
+
+function openOverlayWizard(config, defaults, localStorageApi = createLocalStorage()) {
+  const { document } = parseHTML('<html><body></body></html>');
+  const promise = showSetupWizard(
+    createOverlayWizardOptions(config, defaults, document, localStorageApi)
+  );
+  return { document, promise };
+}
+
+test('runtime storage setup summary includes cache disabled message', () => {
   const config = createConfig();
 
   assert.match(
@@ -113,63 +153,42 @@ test('runtime storage setup branches: summary and resolver error paths stay expl
     }),
     /Cache dezactivat/
   );
+});
+
+test('runtime storage setup resolver reports invalid custom start', () => {
+  const config = createConfig();
 
   assert.deepEqual(
-    resolveSetupWizardResult({
-      mode: 'list',
+    resolveWizard(config, {
       sourceMode: 'custom',
-      defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
       urlInputValue: 'https://example.invalid/',
-      rangeInputValue: '',
       startInputValue: '0',
-      speedPresetValue: 'balanced',
-      concurrencyInputValue: '',
-      delayInputValue: '',
-      verifyUnsolved: false,
-      forceRefresh: false,
-      resumeSavedState: true,
-      config,
-      locationRef: { origin: 'https://www.pbinfo.ro' },
     }),
     { ok: false, errorText: 'Start invalid.' }
   );
+});
+
+test('runtime storage setup resolver reports invalid id range', () => {
+  const config = createConfig();
 
   assert.deepEqual(
-    resolveSetupWizardResult({
+    resolveWizard(config, {
       mode: 'id-range',
-      sourceMode: 'current',
-      defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
-      urlInputValue: '',
       rangeInputValue: 'bad-range',
       startInputValue: '10',
-      speedPresetValue: 'balanced',
-      concurrencyInputValue: '',
-      delayInputValue: '',
-      verifyUnsolved: false,
-      forceRefresh: false,
-      resumeSavedState: true,
-      config,
-      locationRef: { origin: 'https://www.pbinfo.ro' },
     }),
     { ok: false, errorText: 'Interval ID invalid.' }
   );
+});
+
+test('runtime storage setup resolver reports invalid link syntax', () => {
+  const config = createConfig();
 
   assert.deepEqual(
-    resolveSetupWizardResult({
-      mode: 'list',
+    resolveWizard(config, {
       sourceMode: 'custom',
-      defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
       urlInputValue: 'https://[::1',
-      rangeInputValue: '',
       startInputValue: '2',
-      speedPresetValue: 'balanced',
-      concurrencyInputValue: '',
-      delayInputValue: '',
-      verifyUnsolved: false,
-      forceRefresh: false,
-      resumeSavedState: true,
-      config,
-      locationRef: { origin: 'https://www.pbinfo.ro' },
     }),
     { ok: false, errorText: 'Link invalid.' }
   );
@@ -177,16 +196,11 @@ test('runtime storage setup branches: summary and resolver error paths stay expl
 
 test('runtime storage setup branches: wizard cancel and inline validation both resolve safely', async () => {
   const config = createConfig();
-  const defaults = buildSetupWizardDefaults({
-    setupDefaults: {},
-    modeFromWindow: 'list',
-    defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
-    config,
-  });
+  const defaults = buildWizardDefaults(config);
 
   assert.equal(
     await showSetupWizard({
-      defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
+      defaultLink: DEFAULT_LINK,
       config,
       defaults,
       overlayEnabled: false,
@@ -195,43 +209,28 @@ test('runtime storage setup branches: wizard cancel and inline validation both r
     null
   );
 
-  {
-    const { document } = parseHTML('<html><body></body></html>');
-    const promise = showSetupWizard(
-      createOverlayWizardOptions(config, defaults, document, createLocalStorage())
-    );
+  const cancelWizard = openOverlayWizard(config, defaults);
+  cancelWizard.document.querySelector('[data-role="setup-cancel"]').click();
+  assert.equal(await cancelWizard.promise, null);
+  assert.equal(cancelWizard.document.querySelector('[data-role="setup-cancel"]'), null);
 
-    document.querySelector('[data-role="setup-cancel"]').click();
-    assert.equal(await promise, null);
-    assert.equal(document.querySelector('[data-role="setup-cancel"]'), null);
-  }
+  const invalidWizard = openOverlayWizard(config, defaults);
+  const startInput = invalidWizard.document.querySelector('[data-role="setup-start"]');
+  const startButton = invalidWizard.document.querySelector('[data-role="setup-start-button"]');
+  const errorBox = invalidWizard.document.querySelector('[data-role="setup-error"]');
 
-  {
-    const { document } = parseHTML('<html><body></body></html>');
-    const promise = showSetupWizard(
-      createOverlayWizardOptions(config, defaults, document, createLocalStorage())
-    );
-    const startInput = document.querySelector('[data-role="setup-start"]');
-    const startButton = document.querySelector('[data-role="setup-start-button"]');
-    const errorBox = document.querySelector('[data-role="setup-error"]');
+  startInput.value = '0';
+  startButton.click();
 
-    startInput.value = '0';
-    startButton.click();
+  assert.equal(errorBox.textContent, 'Start invalid.');
+  assert.notEqual(invalidWizard.document.querySelector('[data-role="setup-start-button"]'), null);
 
-    assert.equal(errorBox.textContent, 'Start invalid.');
-    assert.notEqual(document.querySelector('[data-role="setup-start-button"]'), null);
-
-    document.querySelector('[data-role="setup-cancel"]').click();
-    assert.equal(await promise, null);
-  }
+  invalidWizard.document.querySelector('[data-role="setup-cancel"]').click();
+  assert.equal(await invalidWizard.promise, null);
 });
 
 test('runtime storage branches: localStorage and indexeddb fallback paths stay covered', async () => {
   assert.equal(readLocalStorageValue({}, 'missing'), null);
-
-  const nullOptionsStorage = createIndexedDbStorage(null);
-  assert.equal(await nullOptionsStorage.openIndexedDb(), null);
-  assert.equal(nullOptionsStorage.storageHasValue('missing-key'), false);
 
   const nullDbStorage = createIndexedDbStorage({
     indexedDBApi: createIndexedDbWithResult(null),

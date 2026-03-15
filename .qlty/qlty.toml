@@ -1,5 +1,18 @@
 config_version = "0"
 
+exclude_patterns = [
+  "coverage/**",
+  "coverage-100/**",
+  "dist/**",
+  "node_modules/**",
+  ".tmp*/**",
+  "package-lock.json",
+]
+
+test_patterns = [
+  "tests/**/*.test.js",
+]
+
 [[source]]
 name = "default"
 default = true
@@ -15,16 +28,3 @@ mode = "block"
 name = "prettier"
 version = "3.4.2"
 mode = "block"
-
-exclude_patterns = [
-  "coverage/**",
-  "coverage-100/**",
-  "dist/**",
-  "node_modules/**",
-  ".tmp*/**",
-  "package-lock.json",
-]
-
-test_patterns = [
-  "tests/**/*.test.js",
-]

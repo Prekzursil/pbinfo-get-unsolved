@@ -59,6 +59,75 @@ function createConfig() {
   };
 }
 
+function resolveWizard(config, overrides = {}) {
+  return resolveSetupWizardResult({
+    mode: 'list',
+    sourceMode: 'current',
+    defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
+    urlInputValue: '',
+    rangeInputValue: '',
+    startInputValue: '3',
+    speedPresetValue: 'balanced',
+    concurrencyInputValue: '',
+    delayInputValue: '',
+    verifyUnsolved: false,
+    forceRefresh: false,
+    resumeSavedState: true,
+    config,
+    locationRef: { origin: 'https://www.pbinfo.ro' },
+    ...overrides,
+  });
+}
+
+function createThemeTargets() {
+  return {
+    appRoot: {
+      dataset: {},
+      setAttribute() {},
+      removeAttribute() {},
+    },
+    documentElement: {
+      dataset: {},
+      setAttribute() {},
+      removeAttribute() {},
+    },
+  };
+}
+
+function openOverlayWizard(config, localStorageApi = createLocalStorage()) {
+  const { document, window } = parseHTML('<html><body></body></html>');
+  const promise = showSetupWizard({
+    defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
+    config,
+    defaults: buildSetupWizardDefaults({
+      setupDefaults: {},
+      modeFromWindow: 'list',
+      defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
+      config,
+    }),
+    overlayEnabled: true,
+    localStorageApi,
+    documentRef: document,
+    locationRef: { origin: 'https://www.pbinfo.ro' },
+    setSelectOptions,
+  });
+
+  return { document, window, promise, localStorageApi };
+}
+
+function setIdRangeWizardValues(documentRef, windowRef, rangeValue, startValue) {
+  const modeSelect = documentRef.querySelector('[data-role="setup-mode"]');
+  const rangeInput = documentRef.querySelector('[data-role="setup-range"]');
+  const startInput = documentRef.querySelector('[data-role="setup-start"]');
+
+  modeSelect.options[1].selected = true;
+  modeSelect.dispatchEvent(new windowRef.Event('change'));
+  rangeInput.value = rangeValue;
+  rangeInput.dispatchEvent(new windowRef.Event('input'));
+  startInput.value = startValue;
+  startInput.dispatchEvent(new windowRef.Event('input'));
+}
+
 test('runtime storage setup helpers build defaults, format dates, and normalize range inputs', () => {
   const config = createConfig();
   const defaults = buildSetupWizardDefaults({
@@ -153,53 +222,22 @@ test('runtime storage setup helpers build summary text and resolve list-mode wiz
   );
 });
 
-test('runtime storage setup helpers resolve id-range validation and theme initialization', () => {
+test('runtime storage setup helpers resolve id-range validation branches', () => {
   const config = createConfig();
-  const invalid = resolveSetupWizardResult({
+  const invalid = resolveWizard(config, {
     mode: 'id-range',
-    sourceMode: 'current',
-    defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
-    urlInputValue: '',
     rangeInputValue: '10-20',
     startInputValue: '21',
-    speedPresetValue: 'balanced',
     concurrencyInputValue: '3',
     delayInputValue: '15',
-    verifyUnsolved: false,
-    forceRefresh: false,
-    resumeSavedState: true,
-    config,
-    locationRef: { origin: 'https://www.pbinfo.ro' },
   });
-  const valid = resolveSetupWizardResult({
+  const valid = resolveWizard(config, {
     mode: 'id-range',
-    sourceMode: 'current',
-    defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
-    urlInputValue: '',
     rangeInputValue: '20-10',
     startInputValue: '12',
-    speedPresetValue: 'balanced',
     concurrencyInputValue: '3',
     delayInputValue: '15',
-    verifyUnsolved: false,
-    forceRefresh: false,
-    resumeSavedState: true,
-    config,
-    locationRef: { origin: 'https://www.pbinfo.ro' },
   });
-  const localStorageApi = createLocalStorage({
-    'pbinfo-get-unsolved:theme': 'dark',
-  });
-  const appRoot = {
-    dataset: {},
-    setAttribute() {},
-    removeAttribute() {},
-  };
-  const documentElement = {
-    dataset: {},
-    setAttribute() {},
-    removeAttribute() {},
-  };
 
   assert.deepEqual(invalid, {
     ok: false,
@@ -210,12 +248,21 @@ test('runtime storage setup helpers resolve id-range validation and theme initia
   assert.equal(valid.result.pageLink, 'id-range:https://www.pbinfo.ro:10-20');
   assert.equal(valid.result.concurrency, 3);
   assert.equal(valid.result.delayMs, 15);
+});
+
+test('runtime storage setup helpers apply initial theme preference from local storage', () => {
+  const localStorageApi = createLocalStorage({
+    'pbinfo-get-unsolved:theme': 'dark',
+  });
+  const { appRoot, documentElement } = createThemeTargets();
+
   assert.equal(applyInitialThemePreference({ localStorageApi, appRoot, documentElement }), 'dark');
   assert.equal(appRoot.dataset.theme, 'dark');
 });
 
-test('runtime storage setup helpers reject invalid summary and wizard input branches', async () => {
+test('runtime storage setup summary includes id-range fallback and disabled cache markers', () => {
   const config = createConfig();
+
   const disabledSummary = buildSetupSummaryText({
     mode: 'id-range',
     sourceMode: 'current',
@@ -226,54 +273,49 @@ test('runtime storage setup helpers reject invalid summary and wizard input bran
     cacheEnabled: false,
     forceRefresh: false,
   });
-  const invalidStart = resolveSetupWizardResult({
-    mode: 'list',
-    sourceMode: 'current',
-    defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
-    urlInputValue: '',
-    rangeInputValue: '',
-    startInputValue: '0',
-    speedPresetValue: 'balanced',
-    concurrencyInputValue: '',
-    delayInputValue: '',
-    verifyUnsolved: false,
-    forceRefresh: false,
-    resumeSavedState: true,
-    config,
-    locationRef: { origin: 'https://www.pbinfo.ro' },
+
+  assert.match(disabledSummary, /intervalul 10-20/);
+  assert.match(disabledSummary, /Cache dezactivat/);
+});
+
+test('runtime storage setup resolver rejects invalid list start', () => {
+  const config = createConfig();
+
+  assert.deepEqual(resolveWizard(config, { startInputValue: '0' }), {
+    ok: false,
+    errorText: 'Start invalid.',
   });
-  const invalidRange = resolveSetupWizardResult({
-    mode: 'id-range',
-    sourceMode: 'current',
-    defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
-    urlInputValue: '',
-    rangeInputValue: 'bad',
-    startInputValue: '1',
-    speedPresetValue: 'balanced',
-    concurrencyInputValue: '',
-    delayInputValue: '',
-    verifyUnsolved: false,
-    forceRefresh: false,
-    resumeSavedState: true,
-    config,
-    locationRef: { origin: 'https://www.pbinfo.ro' },
-  });
-  const invalidLink = resolveSetupWizardResult({
-    mode: 'list',
-    sourceMode: 'custom',
-    defaultLink: '',
-    urlInputValue: '::::',
-    rangeInputValue: '',
-    startInputValue: '3',
-    speedPresetValue: 'balanced',
-    concurrencyInputValue: '',
-    delayInputValue: '',
-    verifyUnsolved: false,
-    forceRefresh: false,
-    resumeSavedState: true,
-    config,
-    locationRef: { origin: 'https://www.pbinfo.ro' },
-  });
+});
+
+test('runtime storage setup resolver rejects invalid id-range input', () => {
+  const config = createConfig();
+
+  assert.deepEqual(
+    resolveWizard(config, {
+      mode: 'id-range',
+      rangeInputValue: 'bad',
+      startInputValue: '1',
+    }),
+    { ok: false, errorText: 'Interval ID invalid.' }
+  );
+});
+
+test('runtime storage setup resolver rejects invalid custom link', () => {
+  const config = createConfig();
+
+  assert.deepEqual(
+    resolveWizard(config, {
+      sourceMode: 'custom',
+      defaultLink: '',
+      urlInputValue: '::::',
+    }),
+    { ok: false, errorText: 'Link invalid.' }
+  );
+});
+
+test('runtime storage setup wizard returns null when overlay is disabled', async () => {
+  const config = createConfig();
+
   const hiddenWizard = await showSetupWizard({
     defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
     config,
@@ -287,53 +329,23 @@ test('runtime storage setup helpers reject invalid summary and wizard input bran
     setSelectOptions,
   });
 
-  assert.match(disabledSummary, /intervalul 10-20/);
-  assert.match(disabledSummary, /Cache dezactivat/);
-  assert.deepEqual(invalidStart, { ok: false, errorText: 'Start invalid.' });
-  assert.deepEqual(invalidRange, { ok: false, errorText: 'Interval ID invalid.' });
-  assert.deepEqual(invalidLink, { ok: false, errorText: 'Link invalid.' });
   assert.equal(hiddenWizard, null);
 });
 
 test('runtime storage setup wizard returns saved selections through the extracted module', async () => {
-  const { document, window } = parseHTML('<html><body></body></html>');
-  const localStorageApi = createLocalStorage();
   const config = createConfig();
-  const promise = showSetupWizard({
-    defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
-    config,
-    defaults: buildSetupWizardDefaults({
-      setupDefaults: {},
-      modeFromWindow: 'list',
-      defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
-      config,
-    }),
-    overlayEnabled: true,
-    localStorageApi,
-    documentRef: document,
-    locationRef: { origin: 'https://www.pbinfo.ro' },
-    setSelectOptions,
-  });
-  const modeSelect = document.querySelector('[data-role="setup-mode"]');
-  const rangeInput = document.querySelector('[data-role="setup-range"]');
-  const startInput = document.querySelector('[data-role="setup-start"]');
-  const speedSelect = document.querySelector('[data-role="setup-speed"]');
-  const forceRefreshCheck = document.querySelector('[data-role="setup-force-refresh"]');
-  const startButton = document.querySelector('[data-role="setup-start-button"]');
+  const wizard = openOverlayWizard(config, createLocalStorage());
+  const speedSelect = wizard.document.querySelector('[data-role="setup-speed"]');
+  const forceRefreshCheck = wizard.document.querySelector('[data-role="setup-force-refresh"]');
 
-  modeSelect.options[1].selected = true;
-  modeSelect.dispatchEvent(new window.Event('change'));
-  rangeInput.value = '25-20';
-  rangeInput.dispatchEvent(new window.Event('input'));
-  startInput.value = '21';
-  startInput.dispatchEvent(new window.Event('input'));
+  setIdRangeWizardValues(wizard.document, wizard.window, '25-20', '21');
   speedSelect.options[2].selected = true;
-  speedSelect.dispatchEvent(new window.Event('change'));
+  speedSelect.dispatchEvent(new wizard.window.Event('change'));
   forceRefreshCheck.checked = true;
-  forceRefreshCheck.dispatchEvent(new window.Event('change'));
-  startButton.click();
+  forceRefreshCheck.dispatchEvent(new wizard.window.Event('change'));
+  wizard.document.querySelector('[data-role="setup-start-button"]').click();
 
-  const result = await promise;
+  const result = await wizard.promise;
 
   assert.deepEqual(result, {
     scanMode: 'id-range',
@@ -348,48 +360,28 @@ test('runtime storage setup wizard returns saved selections through the extracte
     delayMs: 125,
     sourceMode: 'current',
   });
-  assert.equal(document.querySelector('[data-role="setup-start-button"]'), null);
-  assert.match(localStorageApi.dump()['pbinfo-get-unsolved:setup-prefs'], /"idRange":"20-25"/);
+  assert.equal(wizard.document.querySelector('[data-role="setup-start-button"]'), null);
+  assert.match(
+    wizard.localStorageApi.dump()['pbinfo-get-unsolved:setup-prefs'],
+    /"idRange":"20-25"/
+  );
 });
 
 test('runtime storage setup wizard keeps modal open on validation errors and closes on cancel', async () => {
-  const { document, window } = parseHTML('<html><body></body></html>');
   const config = createConfig();
-  const promise = showSetupWizard({
-    defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
-    config,
-    defaults: buildSetupWizardDefaults({
-      setupDefaults: {},
-      modeFromWindow: 'list',
-      defaultLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
-      config,
-    }),
-    overlayEnabled: true,
-    localStorageApi: createLocalStorage(),
-    documentRef: document,
-    locationRef: { origin: 'https://www.pbinfo.ro' },
-    setSelectOptions,
-  });
-  const modeSelect = document.querySelector('[data-role="setup-mode"]');
-  const rangeInput = document.querySelector('[data-role="setup-range"]');
-  const startInput = document.querySelector('[data-role="setup-start"]');
-  const startButton = document.querySelector('[data-role="setup-start-button"]');
-  const cancelButton = document.querySelector('[data-role="setup-cancel"]');
-  const errorBox = document.querySelector('[data-role="setup-error"]');
+  const wizard = openOverlayWizard(config, createLocalStorage());
+  const startButton = wizard.document.querySelector('[data-role="setup-start-button"]');
+  const cancelButton = wizard.document.querySelector('[data-role="setup-cancel"]');
+  const errorBox = wizard.document.querySelector('[data-role="setup-error"]');
 
-  modeSelect.options[1].selected = true;
-  modeSelect.dispatchEvent(new window.Event('change'));
-  rangeInput.value = 'bad';
-  rangeInput.dispatchEvent(new window.Event('input'));
-  startInput.value = '1';
-  startInput.dispatchEvent(new window.Event('input'));
+  setIdRangeWizardValues(wizard.document, wizard.window, 'bad', '1');
   startButton.click();
 
   assert.equal(errorBox.textContent, 'Interval ID invalid.');
-  assert.notEqual(document.querySelector('[data-role="setup-start-button"]'), null);
+  assert.notEqual(wizard.document.querySelector('[data-role="setup-start-button"]'), null);
 
   cancelButton.click();
 
-  assert.equal(await promise, null);
-  assert.equal(document.querySelector('[data-role="setup-cancel"]'), null);
+  assert.equal(await wizard.promise, null);
+  assert.equal(wizard.document.querySelector('[data-role="setup-cancel"]'), null);
 });

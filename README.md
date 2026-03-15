@@ -2,7 +2,7 @@
 
 Scanner pentru probleme pbinfo nerezolvate, cu overlay wizard, trust/confidence reporting, parsed-result cache și livrare atât ca extension, cât și ca userscript/bookmarklet.
 
-<img width="1920" height="1080" alt="Screenshot" src="https://github.com/user-attachments/assets/604a2d1d-a318-4e7d-93d3-85603c8aa2ad" />
+![Screenshot](https://github.com/user-attachments/assets/604a2d1d-a318-4e7d-93d3-85603c8aa2ad)
 
 ## Quick Start (Extension)
 
@@ -25,7 +25,7 @@ Se generează:
 - Chrome/Edge: `chrome://extensions` -> activează Developer mode -> `Load unpacked` -> alege `dist/extension/chromium/`
 - Firefox: `about:debugging#/runtime/this-firefox` -> `Load Temporary Add-on...` -> alege `dist/extension/firefox/manifest.json`
 
-### 3. Rulează scanarea
+### 3. Rulează scanarea (Userscript)
 
 1. Intră pe `https://www.pbinfo.ro/` și conectează-te.
 2. Vei vedea butonul flotant **Start scan** și popup-ul extension-ului poate lansa overlay-ul.

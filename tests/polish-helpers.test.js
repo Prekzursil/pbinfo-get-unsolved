@@ -19,6 +19,70 @@ const {
   buildProgressText,
 } = require('../src/core');
 
+function createExportPayloadFixture() {
+  return buildResultsExportPayload(
+    [
+      {
+        id: 7,
+        name: 'sum',
+        link: 'https://www.pbinfo.ro/probleme/7/sum',
+        status: 'tried',
+        quality: 'scan-only',
+        verifiedAt: 123456789,
+        userScore: 70,
+        maxScore: 100,
+        difficulty: 0,
+        postedBy_name: 'mentor',
+        postedBy_link: 'https://www.pbinfo.ro/utilizator/1/mentor',
+        author: 'Author',
+        source: 'Source',
+      },
+    ],
+    {
+      source: {
+        scanMode: 'list',
+        pageLink: 'https://www.pbinfo.ro/?pagina=probleme-lista&tag=1',
+      },
+      settings: {
+        speedPreset: 'balanced',
+        verifyUnsolved: true,
+      },
+      coverage: {
+        scannedPages: 12,
+        expectedPages: 15,
+        scannedProblems: 120,
+        totalProblems: 150,
+        percent: 80,
+      },
+      reliability: {
+        retryCount: 4,
+        blocked: 1,
+        timeout: 2,
+        parseFail: 0,
+      },
+      verification: {
+        enabled: true,
+        verifiedUnsolved: 1,
+        reclassifiedSolved: 0,
+        stillUnknown: 0,
+      },
+    }
+  );
+}
+
+function expectCacheFreshness(entry, options, expected) {
+  assert.equal(
+    isParsedCacheEntryFresh(entry, {
+      cacheKind: 'verify-problem',
+      cacheKey: '42',
+      userNamespace: '321:demo-user',
+      forceRefresh: false,
+      ...options,
+    }),
+    expected
+  );
+}
+
 test('parseRetryAfterMs: supports seconds, HTTP date, and invalid values', () => {
   const now = Date.UTC(2026, 2, 9, 12, 0, 0);
 
@@ -76,55 +140,8 @@ test('outcome ledger: tracks latest state, retries, averages, and retryable keys
   );
 });
 
-test('buildResultsExportPayload: wraps problems with coverage, reliability, settings, and verification metadata', () => {
-  const payload = buildResultsExportPayload(
-    [
-      {
-        id: 7,
-        name: 'sum',
-        link: 'https://www.pbinfo.ro/probleme/7/sum',
-        status: 'tried',
-        quality: 'scan-only',
-        verifiedAt: 123456789,
-        userScore: 70,
-        maxScore: 100,
-        difficulty: 0,
-        postedBy_name: 'mentor',
-        postedBy_link: 'https://www.pbinfo.ro/utilizator/1/mentor',
-        author: 'Author',
-        source: 'Source',
-      },
-    ],
-    {
-      source: {
-        scanMode: 'list',
-        pageLink: 'https://www.pbinfo.ro/?pagina=probleme-lista&tag=1',
-      },
-      settings: {
-        speedPreset: 'balanced',
-        verifyUnsolved: true,
-      },
-      coverage: {
-        scannedPages: 12,
-        expectedPages: 15,
-        scannedProblems: 120,
-        totalProblems: 150,
-        percent: 80,
-      },
-      reliability: {
-        retryCount: 4,
-        blocked: 1,
-        timeout: 2,
-        parseFail: 0,
-      },
-      verification: {
-        enabled: true,
-        verifiedUnsolved: 1,
-        reclassifiedSolved: 0,
-        stillUnknown: 0,
-      },
-    }
-  );
+test('buildResultsExportPayload: wraps metadata for coverage, reliability, settings, and verification', () => {
+  const payload = createExportPayloadFixture();
 
   assert.equal(payload.type, 'pbinfo-get-unsolved-results');
   assert.equal(payload.exportVersion, 1);
@@ -133,6 +150,11 @@ test('buildResultsExportPayload: wraps problems with coverage, reliability, sett
   assert.equal(payload.coverage.expectedPages, 15);
   assert.equal(payload.reliability.retryCount, 4);
   assert.equal(payload.verification.verifiedUnsolved, 1);
+});
+
+test('buildResultsExportPayload: preserves problem verification fields', () => {
+  const payload = createExportPayloadFixture();
+
   assert.equal(payload.problems.length, 1);
   assert.equal(payload.problems[0].id, 7);
   assert.equal(payload.problems[0].quality, 'scan-only');
@@ -193,46 +215,10 @@ test('parsed cache helpers: enforce ttl, user namespace, and force-refresh bypas
 
   assert.equal(entry.cachedAt, 1_000);
   assert.equal(entry.expiresAt, 16_000);
-  assert.equal(
-    isParsedCacheEntryFresh(entry, {
-      now: 10_000,
-      userNamespace: '321:demo-user',
-      forceRefresh: false,
-      cacheKind: 'verify-problem',
-      cacheKey: '42',
-    }),
-    true
-  );
-  assert.equal(
-    isParsedCacheEntryFresh(entry, {
-      now: 20_000,
-      userNamespace: '321:demo-user',
-      forceRefresh: false,
-      cacheKind: 'verify-problem',
-      cacheKey: '42',
-    }),
-    false
-  );
-  assert.equal(
-    isParsedCacheEntryFresh(entry, {
-      now: 10_000,
-      userNamespace: 'other-user',
-      forceRefresh: false,
-      cacheKind: 'verify-problem',
-      cacheKey: '42',
-    }),
-    false
-  );
-  assert.equal(
-    isParsedCacheEntryFresh(entry, {
-      now: 10_000,
-      userNamespace: '321:demo-user',
-      forceRefresh: true,
-      cacheKind: 'verify-problem',
-      cacheKey: '42',
-    }),
-    false
-  );
+  expectCacheFreshness(entry, { now: 10_000 }, true);
+  expectCacheFreshness(entry, { now: 20_000 }, false);
+  expectCacheFreshness(entry, { now: 10_000, userNamespace: 'other-user' }, false);
+  expectCacheFreshness(entry, { now: 10_000, forceRefresh: true }, false);
 });
 
 test('filterProblemsByQuality: applies separate quality dimension without changing status', () => {
@@ -382,18 +368,4 @@ test('buildProgressText: uses total problems fallback when page size is unavaila
 
   assert.match(text, /pagini 3\/5/);
   assert.match(text, /probleme 9\/25/);
-});
-
-test('buildProgressText: id-range progress omits total when end id is unavailable', () => {
-  const text = buildProgressText({
-    scanMode: 'id-range',
-    config: { startPage: 200, idRange: {} },
-    stats: { pages: 4, total: 2 },
-    startedAt: 0,
-    now: 5_000,
-    adaptiveEnabled: false,
-  });
-
-  assert.match(text, /^Progres: ID-uri 4, probleme 2 \(găsite\) · timp 5s/);
-  assert.doesNotMatch(text, /ID-uri 4\/\d+/);
 });

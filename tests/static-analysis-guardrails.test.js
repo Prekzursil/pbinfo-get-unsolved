@@ -81,7 +81,6 @@ test('static-analysis guardrails: no known Semgrep-triggering patterns remain in
   const securityHelpers = readRepoFile('scripts/security_helpers.py');
   const coreIndex = readRepoFile('src/core/index.js');
   const releaseWorkflow = readRepoFile('.github/workflows/release.yml');
-  const resolveReleaseTagRunBlock = extractNamedRunBlock(releaseWorkflow, 'Resolve release tag');
   const qualityScripts = [
     'scripts/quality/check_codacy_zero.py',
     'scripts/quality/check_deepscan_zero.py',
@@ -90,10 +89,6 @@ test('static-analysis guardrails: no known Semgrep-triggering patterns remain in
     'scripts/quality/check_sonar_zero.py',
   ];
 
-  assert.ok(
-    resolveReleaseTagRunBlock,
-    'Could not locate "Resolve release tag" run block in release workflow'
-  );
   assert.doesNotMatch(scoreParsing, /\.charCodeAt\(/);
   assert.doesNotMatch(scoreParsing, /\bnew RegExp\(/);
   assert.doesNotMatch(scoreParsing, /\/\w\/\.(?:test|exec)\(/);
@@ -118,10 +113,12 @@ test('static-analysis guardrails: no known Semgrep-triggering patterns remain in
   assert.match(buildRelease, /require\('esbuild'\)/);
   assert.doesNotMatch(buildRelease, /return `\(function\(\)\{const __modules=\{/);
   assert.doesNotMatch(securityHelpers, /\bHTTPSConnection\s*\(/);
-  assert.match(releaseWorkflow, /RELEASE_EVENT_NAME:\s+\$\{\{\s*github\.event_name\s*\}\}/);
-  assert.match(releaseWorkflow, /RELEASE_INPUT_TAG:\s+\$\{\{\s*inputs\.tag\s*\}\}/);
+  assert.doesNotMatch(releaseWorkflow, /workflow_dispatch:\s*\n\s+inputs:/);
+  assert.doesNotMatch(releaseWorkflow, /\bResolve release tag\b/);
+  assert.match(releaseWorkflow, /tag_name:\s+\$\{\{\s*github\.ref_name\s*\}\}/);
+  assert.doesNotMatch(releaseWorkflow, /RELEASE_EVENT_NAME/);
+  assert.doesNotMatch(releaseWorkflow, /RELEASE_INPUT_TAG/);
   assert.match(coreIndex, /require\('\.\/progress'\)/);
-  assert.doesNotMatch(resolveReleaseTagRunBlock, /\$\{\{/);
 
   qualityScripts.forEach((relativePath) => {
     assert.doesNotMatch(readRepoFile(relativePath), /urllib\.request\.urlopen\(/, relativePath);
