@@ -42,6 +42,13 @@ function extractNamedRunBlock(workflowText, stepName) {
   return blockLines.length > 0 ? blockLines.join('\n') : null;
 }
 
+function countNonCommentLines(sourceText) {
+  return sourceText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== '' && !line.startsWith('//')).length;
+}
+
 test('static-analysis guardrails helper extracts workflow run blocks without nested backtracking regex', () => {
   const workflowText = [
     'jobs:',
@@ -92,6 +99,10 @@ test('static-analysis guardrails: no known Semgrep-triggering patterns remain in
   assert.doesNotMatch(runtime, /\.innerHTML\s*=/);
   assert.doesNotMatch(runtimePageParsing, /function createProblemRecord\(/);
   assert.doesNotMatch(runtimeStorageSetup, /function updateSetupWizardView\(\s*\{/);
+  assert.ok(
+    countNonCommentLines(runtimeStorageSetup) <= 500,
+    'runtime-storage-setup.js should stay below Codacy Lizard medium NLOC threshold'
+  );
   assert.doesNotMatch(runtime, /console\.warn\(`Failed to save/);
   assert.doesNotMatch(network, /catch \(error\) \{\s*void error;\s*return null;/);
   assert.doesNotMatch(runtimeStorage, /catch \(error\) \{\s*void error;/);
