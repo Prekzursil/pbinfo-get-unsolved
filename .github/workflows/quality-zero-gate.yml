@@ -25,7 +25,7 @@ jobs:
       DEEPSCAN_OPEN_ISSUES_URL: ${{ vars.DEEPSCAN_OPEN_ISSUES_URL }}
       DEEPSCAN_API_TOKEN: ${{ secrets.DEEPSCAN_API_TOKEN }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       - name: Run quality secrets preflight
         run: |
           python3 scripts/quality/check_quality_secrets.py \
@@ -33,9 +33,10 @@ jobs:
             --out-md quality-secrets/secrets.md
       - name: Upload secrets preflight artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: quality-secrets
+          include-hidden-files: false
           path: quality-secrets
 
   quality-zero-gate:
@@ -49,13 +50,12 @@ jobs:
       QUALITY_CHECK_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       QLTY_ENFORCE: ${{ vars.QLTY_ENFORCE || 'false' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       - name: Assert secrets preflight succeeded
+        if: needs.secrets-preflight.result != 'success'
         run: |
-          if [ "${{ needs.secrets-preflight.result }}" != "success" ]; then
-            echo "Quality Secrets Preflight failed or was not successful." >&2
-            exit 1
-          fi
+          echo "Quality Secrets Preflight failed or was not successful." >&2
+          exit 1
       - name: Assert required quality contexts are green
         shell: bash
         run: |
@@ -91,7 +91,8 @@ jobs:
           python3 scripts/quality/check_required_checks.py "${args[@]}"
       - name: Upload aggregate artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: quality-zero-gate
+          include-hidden-files: false
           path: quality-zero-gate

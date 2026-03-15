@@ -94,6 +94,7 @@ test('static-analysis guardrails: no known Semgrep-triggering patterns remain in
     resolveReleaseTagRunBlock,
     'Could not locate "Resolve release tag" run block in release workflow'
   );
+  assert.doesNotMatch(scoreParsing, /\.charCodeAt\(/);
   assert.doesNotMatch(scoreParsing, /\bnew RegExp\(/);
   assert.doesNotMatch(scoreParsing, /\/\w\/\.(?:test|exec)\(/);
   assert.doesNotMatch(runtime, /\.innerHTML\s*=/);

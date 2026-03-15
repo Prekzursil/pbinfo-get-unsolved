@@ -17,15 +17,15 @@ test('qlty is configured with repo-local defaults and coverage upload wiring', (
   assert.match(qltyToml, /^config_version = "0"$/m);
   assert.match(qltyToml, /\[\[source\]\]\s+name = "default"\s+default = true/s);
   assert.match(qltyToml, /exclude_patterns = \[/);
-  assert.match(qltyToml, /\[smells\]\s+mode = "comment"/s);
+  assert.match(qltyToml, /\[smells\]\s+mode = "block"/s);
   assert.match(qltyToml, /\[\[plugin\]\]\s+name = "actionlint"\s+mode = "block"/s);
   assert.match(
     qltyToml,
     /\[\[plugin\]\]\s+name = "prettier"\s+version = "3\.4\.2"\s+mode = "block"/s
   );
-  assert.match(qltyToml, /"tests\/\*\*"/);
-  assert.match(qltyToml, /"docs\/\*\*"/);
-  assert.match(qltyToml, /"\.github\/\*\*"/);
+  assert.doesNotMatch(qltyToml, /"tests\/\*\*"/);
+  assert.doesNotMatch(qltyToml, /"docs\/\*\*"/);
+  assert.doesNotMatch(qltyToml, /"\.github\/\*\*"/);
   assert.match(qltyToml, /"package-lock\.json"/);
   assert.match(qltyToml, /"tests\/\*\*\/\*\.test\.js"/);
 

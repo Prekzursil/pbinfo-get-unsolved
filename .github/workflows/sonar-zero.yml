@@ -15,19 +15,21 @@ jobs:
     name: Sonar Zero
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       - name: Assert Sonar zero-open gate
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PULL_REQUEST: ${{ github.event.pull_request.number || '' }}
         run: |
           python3 scripts/quality/check_sonar_zero.py \
             --project-key "Prekzursil_pbinfo-get-unsolved" \
-            --pull-request "${{ github.event.pull_request.number || '' }}" \
+            --pull-request "${SONAR_PULL_REQUEST}" \
             --out-json "sonar-zero/sonar.json" \
             --out-md "sonar-zero/sonar.md"
       - name: Upload Sonar artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: sonar-zero
+          include-hidden-files: false
           path: sonar-zero

@@ -20,10 +20,8 @@ test('sonar zero gate uses checked-in project metadata without launching a dupli
   assert.doesNotMatch(sonarWorkflow, /sonarqube-scan-action/);
   assert.match(sonarWorkflow, /check_sonar_zero\.py/);
   assert.match(sonarWorkflow, /--project-key "Prekzursil_pbinfo-get-unsolved"/);
-  assert.match(
-    sonarWorkflow,
-    /--pull-request "\$\{\{ github\.event\.pull_request\.number \|\| '' \}\}"/
-  );
+  assert.match(sonarWorkflow, /SONAR_PULL_REQUEST:/);
+  assert.match(sonarWorkflow, /--pull-request "\$\{SONAR_PULL_REQUEST\}"/);
 });
 
 test('required-context workflows resolve PR head SHA instead of the synthetic merge SHA', () => {

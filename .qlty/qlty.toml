@@ -5,7 +5,7 @@ name = "default"
 default = true
 
 [smells]
-mode = "comment"
+mode = "block"
 
 [[plugin]]
 name = "actionlint"
@@ -22,14 +22,7 @@ exclude_patterns = [
   "dist/**",
   "node_modules/**",
   ".tmp*/**",
-  "tests/**",
-  "tests/fixtures/**",
-  "docs/**",
-  ".github/**",
   "package-lock.json",
-  "README.md",
-  "CHANGELOG.md",
-  "TODO.md",
 ]
 
 test_patterns = [
