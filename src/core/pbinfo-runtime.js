@@ -4462,9 +4462,7 @@ if (globalThis.document === undefined) {
       if (!blocked) {
         const prefetchResolution = resolvePrefetchedIdRangeScoreForPage(pageIndex, retryCount);
         knownIdRangeScore = prefetchResolution.knownIdRangeScore;
-        if (prefetchResolution.handled) {
-          blocked = true;
-        } else if (shouldDeferPageForConcurrency(pageIndex, retryCount)) {
+        if (prefetchResolution.handled || shouldDeferPageForConcurrency(pageIndex, retryCount)) {
           blocked = true;
         }
       }

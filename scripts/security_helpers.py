@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__ import absolute_import, division
 
 import ipaddress
 import json
@@ -143,7 +143,7 @@ def normalize_https_url(
     return urlunparse(sanitized)
 
 
-def safe_output_path(raw: str, fallback: str, *, base: Path | None = None) -> Path:
+def safe_output_path(raw: str, fallback: str, *, base: Optional[Path] = None) -> Path:
     root = (base or Path.cwd()).resolve()
     candidate = Path((raw or "").strip() or fallback).expanduser()
     if not candidate.is_absolute():

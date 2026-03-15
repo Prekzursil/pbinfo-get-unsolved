@@ -7,7 +7,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 
 
 def _load_security_helpers():
@@ -30,8 +30,8 @@ TOTAL_KEYS = {"total", "totalItems", "total_items", "count", "hits", "open_issue
 
 @dataclass(frozen=True)
 class _DeepScanGateResult:
-    open_issues: int | None
-    findings: list[str]
+    open_issues: Optional[int]
+    findings: List[str]
 
 
 def _parse_args() -> argparse.Namespace:
@@ -42,7 +42,7 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def extract_total_open(payload: Any) -> int | None:
+def extract_total_open(payload: Any) -> Optional[int]:
     stack = [payload]
     while stack:
         current = stack.pop()
@@ -58,7 +58,7 @@ def extract_total_open(payload: Any) -> int | None:
     return None
 
 
-def _request_json(url: str, token: str) -> dict[str, Any]:
+def _request_json(url: str, token: str) -> Dict[str, Any]:
     return request_json(
         url,
         headers={
@@ -70,7 +70,7 @@ def _request_json(url: str, token: str) -> dict[str, Any]:
     )
 
 
-def _render_md(payload: dict) -> str:
+def _render_md(payload: Dict[str, Any]) -> str:
     lines = [
         "# DeepScan Zero Gate",
         "",
@@ -89,8 +89,8 @@ def _render_md(payload: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _validate_inputs(token: str, raw_open_issues_url: str) -> tuple[str, list[str]]:
-    findings: list[str] = []
+def _validate_inputs(token: str, raw_open_issues_url: str) -> Tuple[str, List[str]]:
+    findings: List[str] = []
     open_issues_url = raw_open_issues_url.strip()
 
     if not token:
@@ -107,10 +107,10 @@ def _validate_inputs(token: str, raw_open_issues_url: str) -> tuple[str, list[st
 
 
 def _evaluate_gate(open_issues_url: str, token: str) -> _DeepScanGateResult:
-    findings: list[str] = []
+    findings: List[str] = []
     try:
         payload = _request_json(open_issues_url, token)
-    except Exception as exc:  # pragma: no cover - network/runtime surface
+    except (RuntimeError, ValueError, TypeError) as exc:  # pragma: no cover - network/runtime surface
         findings.append(f"DeepScan API request failed: {exc}")
         return _DeepScanGateResult(open_issues=None, findings=findings)
 
@@ -130,7 +130,7 @@ def main() -> int:
     token = (args.token or os.environ.get("DEEPSCAN_API_TOKEN", "")).strip()
     open_issues_url, findings = _validate_inputs(token, os.environ.get("DEEPSCAN_OPEN_ISSUES_URL", ""))
 
-    open_issues: int | None = None
+    open_issues: Optional[int] = None
     if not findings:
         gate_result = _evaluate_gate(open_issues_url, token)
         findings.extend(gate_result.findings)

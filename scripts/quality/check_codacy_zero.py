@@ -10,7 +10,7 @@ import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 def _load_security_helpers():
@@ -39,7 +39,7 @@ class _CodacyContext:
     token: str
     owner: str
     repo: str
-    providers: tuple[str, ...]
+    providers: Tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -55,7 +55,7 @@ class _ProviderResponse:
     passed: bool
     not_found: bool
     open_issues: Optional[int]
-    findings: tuple[str, ...]
+    findings: Tuple[str, ...]
     selected_branch: str = ""
     analysed_sha: str = ""
     error: Optional[Exception] = None
@@ -65,7 +65,7 @@ class _ProviderResponse:
 class _GateOutcome:
     status: str
     open_issues: Optional[int]
-    findings: tuple[str, ...]
+    findings: Tuple[str, ...]
     selected_branch: str = ""
     analysed_sha: str = ""
 
@@ -119,22 +119,36 @@ def _request_json(
     )
 
 
+def _extract_total_from_mapping(mapping: Dict[str, Any]) -> Optional[int]:
+    for key, value in mapping.items():
+        if key in TOTAL_KEYS and isinstance(value, (int, float)):
+            return int(value)
+    return None
+
+
+def _append_mapping_values(stack: List[Any], mapping: Dict[str, Any]) -> None:
+    prioritized = [mapping.get(key) for key in ("pagination", "page", "meta")]
+    nested = [value for value in prioritized if value is not None] + list(mapping.values())
+    for value in reversed(nested):
+        stack.append(value)
+
+
+def _append_sequence_values(stack: List[Any], values: List[Any]) -> None:
+    for value in reversed(values):
+        stack.append(value)
+
+
 def extract_total_open(payload: Any) -> Optional[int]:
     stack = [payload]
     while stack:
         current = stack.pop()
         if isinstance(current, dict):
-            for key, value in current.items():
-                if key in TOTAL_KEYS and isinstance(value, (int, float)):
-                    return int(value)
-
-            prioritized = [current.get(key) for key in ("pagination", "page", "meta")]
-            nested = [value for value in prioritized if value is not None] + list(current.values())
-            for value in reversed(nested):
-                stack.append(value)
+            total = _extract_total_from_mapping(current)
+            if total is not None:
+                return total
+            _append_mapping_values(stack, current)
         elif isinstance(current, list):
-            for value in reversed(current):
-                stack.append(value)
+            _append_sequence_values(stack, current)
     return None
 
 
@@ -212,11 +226,11 @@ def _build_backlog_url(context: _CodacyContext, provider: str) -> str:
     )
 
 
-def _provider_candidates(primary_provider: str) -> tuple[str, ...]:
+def _provider_candidates(primary_provider: str) -> Tuple[str, ...]:
     return tuple(dict.fromkeys(p for p in (primary_provider, "gh", "github") if p))
 
 
-def _build_branch_findings(options: _BranchGateOptions, selected_branch: str, analysed_sha: str, open_issues: Optional[int]) -> tuple[str, ...]:
+def _build_branch_findings(options: _BranchGateOptions, selected_branch: str, analysed_sha: str, open_issues: Optional[int]) -> Tuple[str, ...]:
     if not selected_branch:
         return ("Codacy branch lookup did not return a selected branch name.",)
     if selected_branch != options.branch:
@@ -254,7 +268,7 @@ def _query_branch_provider(context: _CodacyContext, provider: str, options: _Bra
         return _ProviderResponse(False, False, None, (f"Codacy API request failed: {exc}",), error=exc)
 
 
-def _is_retryable_stale(options: _BranchGateOptions, findings: tuple[str, ...], deadline: float) -> bool:
+def _is_retryable_stale(options: _BranchGateOptions, findings: Tuple[str, ...], deadline: float) -> bool:
     if not options.expected_sha:
         return False
     if time.monotonic() >= deadline:
@@ -262,8 +276,8 @@ def _is_retryable_stale(options: _BranchGateOptions, findings: tuple[str, ...], 
     return any("branch analysis is stale" in finding for finding in findings)
 
 
-def _build_missing_provider_findings(providers: tuple[str, ...], last_exc: Optional[Exception]) -> tuple[str, ...]:
-    findings: list[str] = [f"Codacy API endpoint was not found for provider(s): {', '.join(providers)}."]
+def _build_missing_provider_findings(providers: Tuple[str, ...], last_exc: Optional[Exception]) -> Tuple[str, ...]:
+    findings: List[str] = [f"Codacy API endpoint was not found for provider(s): {', '.join(providers)}."]
     if last_exc is not None:
         findings.append(f"Last Codacy API error: {last_exc}")
     return tuple(findings)
@@ -327,7 +341,7 @@ def _poll_branch_zero_gate(context: _CodacyContext, options: _BranchGateOptions)
         )
 
 
-def _build_backlog_findings(open_issues: Optional[int]) -> tuple[str, ...]:
+def _build_backlog_findings(open_issues: Optional[int]) -> Tuple[str, ...]:
     if open_issues is None:
         return ("Codacy response did not include a parseable total issue count.",)
     if open_issues != 0:
@@ -388,7 +402,7 @@ def main() -> int:
     open_issues: Optional[int] = None
     selected_branch = ""
     analysed_sha = ""
-    findings: list[str] = []
+    findings: List[str] = []
 
     if not token:
         status = "fail"

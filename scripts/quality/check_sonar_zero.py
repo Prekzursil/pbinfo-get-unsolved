@@ -10,7 +10,7 @@ import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 
 def _load_security_helpers():
@@ -44,10 +44,10 @@ class _SonarContext:
 
 @dataclass
 class _SonarGateState:
-    open_issues: int | None = None
-    security_hotspots_total: int | None = None
-    security_hotspots_to_review: int | None = None
-    quality_gate: str | None = None
+    open_issues: Optional[int] = None
+    security_hotspots_total: Optional[int] = None
+    security_hotspots_to_review: Optional[int] = None
+    quality_gate: Optional[str] = None
 
 
 def _parse_args() -> argparse.Namespace:
@@ -71,7 +71,7 @@ def _auth_header(token: str) -> str:
     return "Basic " + base64.b64encode(raw).decode("ascii")
 
 
-def _request_json(url: str, auth_header: str) -> dict[str, Any]:
+def _request_json(url: str, auth_header: str) -> Dict[str, Any]:
     return request_json(
         url,
         headers={
@@ -83,7 +83,7 @@ def _request_json(url: str, auth_header: str) -> dict[str, Any]:
     )
 
 
-def _render_md(payload: dict) -> str:
+def _render_md(payload: Dict[str, Any]) -> str:
     lines = [
         "# Sonar Zero Gate",
         "",
@@ -105,7 +105,7 @@ def _render_md(payload: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _scope_query(context: _SonarContext) -> dict[str, str]:
+def _scope_query(context: _SonarContext) -> Dict[str, str]:
     query = {"projectKey": context.project_key}
     if context.branch:
         query["branch"] = context.branch
@@ -114,7 +114,7 @@ def _scope_query(context: _SonarContext) -> dict[str, str]:
     return query
 
 
-def _issues_query(context: _SonarContext) -> dict[str, str]:
+def _issues_query(context: _SonarContext) -> Dict[str, str]:
     query = {
         "componentKeys": context.project_key,
         "resolved": "false",
@@ -127,7 +127,7 @@ def _issues_query(context: _SonarContext) -> dict[str, str]:
     return query
 
 
-def _search_total(context: _SonarContext, endpoint: str, query: dict[str, str]) -> int:
+def _search_total(context: _SonarContext, endpoint: str, query: Dict[str, str]) -> int:
     url = f"{context.api_base}{endpoint}?{urllib.parse.urlencode(query)}"
     payload = _request_json(url, context.auth_header)
     paging = payload.get("paging") or {}
@@ -159,8 +159,8 @@ def _populate_gate_state(context: _SonarContext, state: _SonarGateState) -> None
     state.quality_gate = str(project_status.get("status") or "UNKNOWN")
 
 
-def _findings_from_gate_state(state: _SonarGateState) -> list[str]:
-    findings: list[str] = []
+def _findings_from_gate_state(state: _SonarGateState) -> List[str]:
+    findings: List[str] = []
     if state.open_issues != 0:
         findings.append(f"Sonar reports {state.open_issues} open issues (expected 0).")
     if state.security_hotspots_to_review != 0:
@@ -179,7 +179,7 @@ def main() -> int:
     token = (args.token or os.environ.get("SONAR_TOKEN", "")).strip()
     api_base = normalize_https_url(SONAR_API_BASE, allowed_hosts={SONAR_HOST_SUFFIX}).rstrip("/")
 
-    findings: list[str] = []
+    findings: List[str] = []
     gate_state = _SonarGateState()
 
     if not token:

@@ -38,7 +38,7 @@ class _SentryContext:
     api_base: str
     token: str
     org: str
-    projects: tuple[str, ...]
+    projects: Tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -62,7 +62,7 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _auth_headers(token: str) -> dict[str, str]:
+def _auth_headers(token: str) -> Dict[str, str]:
     return {
         "Accept": "application/json",
         "Authorization": f"Bearer {token}",
@@ -109,7 +109,7 @@ def _request_org_issues(api_base: str, org_slug: str, project_id: str, token: st
     return _request(url, token)
 
 
-def _hits_from_headers(headers: Mapping[str, str]) -> int | None:
+def _hits_from_headers(headers: Mapping[str, str]) -> Optional[int]:
     raw = headers.get("x-hits")
     if not raw:
         return None
@@ -119,7 +119,7 @@ def _hits_from_headers(headers: Mapping[str, str]) -> int | None:
         return None
 
 
-def _render_md(payload: dict) -> str:
+def _render_md(payload: Dict[str, Any]) -> str:
     lines = [
         "# Sentry Zero Gate",
         "",
@@ -146,7 +146,7 @@ def _render_md(payload: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _collect_projects(requested_projects: list[str], environ: Mapping[str, str]) -> list[str]:
+def _collect_projects(requested_projects: List[str], environ: Mapping[str, str]) -> List[str]:
     projects = [project for project in requested_projects if project]
     if projects:
         return projects
@@ -158,8 +158,8 @@ def _collect_projects(requested_projects: list[str], environ: Mapping[str, str])
     return projects
 
 
-def _validate_context(context: _SentryContext) -> list[str]:
-    findings: list[str] = []
+def _validate_context(context: _SentryContext) -> List[str]:
+    findings: List[str] = []
     if not context.token:
         findings.append("SENTRY_AUTH_TOKEN is missing.")
     if not context.org:
@@ -169,13 +169,13 @@ def _validate_context(context: _SentryContext) -> list[str]:
     return findings
 
 
-def _discover_project_ids(context: _SentryContext, org_slug: str) -> dict[str, str]:
+def _discover_project_ids(context: _SentryContext, org_slug: str) -> Dict[str, str]:
     try:
         available_projects = _request_projects(context.api_base, org_slug, context.token)
     except RECOVERABLE_SENTRY_ERRORS:
         return {}
 
-    project_ids_by_slug: dict[str, str] = {}
+    project_ids_by_slug: Dict[str, str] = {}
     for item in available_projects:
         slug = str(item.get("slug") or "").strip()
         project_id = item.get("id")
@@ -188,7 +188,7 @@ def _fetch_project_issues(
     context: _SentryContext,
     org_slug: str,
     project_slug: str,
-    project_id: str | None,
+    project_id: Optional[str],
 ) -> Tuple[List[Any], Dict[str, str]]:
     if project_id:
         try:
@@ -199,8 +199,8 @@ def _fetch_project_issues(
     return _request_project_issues(context.api_base, org_slug, project_slug, context.token)
 
 
-def _project_summary(project: str, issues: List[Any], headers: Dict[str, str]) -> tuple[_SentryProjectSummary, list[str]]:
-    findings: list[str] = []
+def _project_summary(project: str, issues: List[Any], headers: Dict[str, str]) -> Tuple[_SentryProjectSummary, List[str]]:
+    findings: List[str] = []
     unresolved = _hits_from_headers(headers)
 
     if unresolved is None:
@@ -216,12 +216,12 @@ def _project_summary(project: str, issues: List[Any], headers: Dict[str, str]) -
     return _SentryProjectSummary(project=project, unresolved=unresolved), findings
 
 
-def _evaluate_context(context: _SentryContext) -> tuple[list[dict[str, Any]], list[str]]:
+def _evaluate_context(context: _SentryContext) -> Tuple[List[Dict[str, Any]], List[str]]:
     org_slug = urllib.parse.quote(context.org, safe="")
     project_ids_by_slug = _discover_project_ids(context, org_slug)
 
-    findings: list[str] = []
-    project_results: list[dict[str, Any]] = []
+    findings: List[str] = []
+    project_results: List[Dict[str, Any]] = []
 
     for project in context.projects:
         issues, headers = _fetch_project_issues(context, org_slug, project, project_ids_by_slug.get(project))
@@ -244,7 +244,7 @@ def main() -> int:
     )
 
     findings = _validate_context(context)
-    project_results: list[dict[str, Any]] = []
+    project_results: List[Dict[str, Any]] = []
 
     if not findings:
         try:
