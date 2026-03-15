@@ -42,19 +42,34 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _extract_total_from_mapping(mapping: Dict[str, Any]) -> Optional[int]:
+    for key, value in mapping.items():
+        if key in TOTAL_KEYS and isinstance(value, (int, float)):
+            return int(value)
+    return None
+
+
+def _append_mapping_values(stack: List[Any], mapping: Dict[str, Any]) -> None:
+    for nested in reversed(list(mapping.values())):
+        stack.append(nested)
+
+
+def _append_sequence_values(stack: List[Any], values: List[Any]) -> None:
+    for nested in reversed(values):
+        stack.append(nested)
+
+
 def extract_total_open(payload: Any) -> Optional[int]:
     stack = [payload]
     while stack:
         current = stack.pop()
         if isinstance(current, dict):
-            for key, value in current.items():
-                if key in TOTAL_KEYS and isinstance(value, (int, float)):
-                    return int(value)
-            for nested in reversed(list(current.values())):
-                stack.append(nested)
+            total = _extract_total_from_mapping(current)
+            if total is not None:
+                return total
+            _append_mapping_values(stack, current)
         elif isinstance(current, list):
-            for nested in reversed(current):
-                stack.append(nested)
+            _append_sequence_values(stack, current)
     return None
 
 

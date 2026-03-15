@@ -8,7 +8,7 @@ import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 
 def _load_security_helpers():
