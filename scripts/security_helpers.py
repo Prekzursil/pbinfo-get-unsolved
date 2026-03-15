@@ -1,8 +1,9 @@
-from __future__ import absolute_import
+from __future__ import annotations
 
 import ipaddress
 import json
-from typing import Any, Dict, Mapping, Optional, Set, Tuple, cast
+from pathlib import Path
+from typing import Any, Dict, Iterable, Mapping, NamedTuple, Optional, Set, Tuple, cast
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 from urllib.parse import urlparse, urlunparse
@@ -17,6 +18,16 @@ class HttpsStatusError(RuntimeError):
         self.body = body
 
 
+class _RequestOptions(NamedTuple):
+    headers: Dict[str, str]
+    method: str
+    data: Any
+    timeout: int
+    allowed_hosts: Optional[Set[str]]
+    allowed_host_suffixes: Optional[Set[str]]
+    strip_query: bool
+
+
 _LOCALHOST_ALIASES = {"localhost", "localhost.localdomain"}
 _DISALLOWED_IP_FLAGS = (
     "is_private",
@@ -25,6 +36,15 @@ _DISALLOWED_IP_FLAGS = (
     "is_reserved",
     "is_multicast",
 )
+_REQUEST_OPTION_KEYS = {
+    "headers",
+    "method",
+    "data",
+    "timeout",
+    "allowed_hosts",
+    "allowed_host_suffixes",
+    "strip_query",
+}
 
 
 def _normalize_hostname(raw_hostname: str) -> str:
@@ -123,6 +143,19 @@ def normalize_https_url(
     return urlunparse(sanitized)
 
 
+def safe_output_path(raw: str, fallback: str, *, base: Path | None = None) -> Path:
+    root = (base or Path.cwd()).resolve()
+    candidate = Path((raw or "").strip() or fallback).expanduser()
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    resolved = candidate.resolve(strict=False)
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"Output path escapes workspace root: {candidate}") from exc
+    return resolved
+
+
 def _encode_request_body(data: Any, headers: Dict[str, str]) -> Optional[bytes]:
     if data is None:
         return None
@@ -147,6 +180,51 @@ def _decode_body_text(raw_body: Any) -> str:
     if isinstance(raw_body, bytes):
         return raw_body.decode("utf-8", errors="replace")
     return str(raw_body or "")
+
+
+def _normalize_host_collection(raw_hosts: Any, *, option_name: str, function_name: str) -> Optional[Set[str]]:
+    if raw_hosts is None:
+        return None
+    try:
+        return {str(host) for host in cast(Iterable[Any], raw_hosts)}
+    except TypeError as exc:
+        raise TypeError(f"{function_name}() {option_name} must be iterable") from exc
+
+
+def _raise_unexpected_option(function_name: str, option_name: str) -> None:
+    raise TypeError(f"{function_name}() got an unexpected keyword argument '{option_name}'")
+
+
+def _coerce_request_options(function_name: str, options: Mapping[str, Any]) -> _RequestOptions:
+    for option_name in options:
+        if option_name not in _REQUEST_OPTION_KEYS:
+            _raise_unexpected_option(function_name, option_name)
+
+    headers = dict(cast(Mapping[str, str], options.get("headers") or {}))
+    method = str(options.get("method") or "GET")
+    timeout_value = options.get("timeout", 30)
+    try:
+        timeout = int(timeout_value)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"{function_name}() timeout must be an integer") from exc
+
+    return _RequestOptions(
+        headers=headers,
+        method=method,
+        data=options.get("data"),
+        timeout=timeout,
+        allowed_hosts=_normalize_host_collection(
+            options.get("allowed_hosts"),
+            option_name="allowed_hosts",
+            function_name=function_name,
+        ),
+        allowed_host_suffixes=_normalize_host_collection(
+            options.get("allowed_host_suffixes"),
+            option_name="allowed_host_suffixes",
+            function_name=function_name,
+        ),
+        strip_query=bool(options.get("strip_query", False)),
+    )
 
 
 def _raise_https_status_from_error(safe_url: str, error: urllib_error.HTTPError) -> None:
@@ -195,35 +273,24 @@ def _read_response_payload(response: Any) -> Tuple[int, str, str, Dict[str, str]
     return response_status, response_reason, response_text, response_headers
 
 
-def request_json_with_headers(
-    raw_url: str,
-    *,
-    headers: Optional[Dict[str, str]] = None,
-    method: str = "GET",
-    data: Any = None,
-    timeout: int = 30,
-    allowed_hosts: Optional[Set[str]] = None,
-    allowed_host_suffixes: Optional[Set[str]] = None,
-    strip_query: bool = False,
-) -> Tuple[Any, Dict[str, str]]:
+def request_json_with_headers(raw_url: str, **kwargs: Any) -> Tuple[Any, Dict[str, str]]:
+    options = _coerce_request_options("request_json_with_headers", kwargs)
     safe_url = normalize_https_url(
         raw_url,
-        allowed_hosts=allowed_hosts,
-        allowed_host_suffixes=allowed_host_suffixes,
-        strip_query=strip_query,
+        allowed_hosts=options.allowed_hosts,
+        allowed_host_suffixes=options.allowed_host_suffixes,
+        strip_query=options.strip_query,
     )
-    request_headers: Dict[str, str] = dict(cast(Mapping[str, str], headers or {}))
-    body = _encode_request_body(data, request_headers)
+    request_headers = dict(options.headers)
+    body = _encode_request_body(options.data, request_headers)
     request_obj = urllib_request.Request(
         safe_url,
         data=body,
         headers=request_headers,
-        method=method,
+        method=options.method,
     )
-    response = _open_https_response(request_obj, safe_url=safe_url, timeout=timeout)
-    response_status, response_reason, response_text, response_headers = _read_response_payload(
-        response
-    )
+    response = _open_https_response(request_obj, safe_url=safe_url, timeout=options.timeout)
+    response_status, response_reason, response_text, response_headers = _read_response_payload(response)
 
     if response_status >= 400:
         raise HttpsStatusError(safe_url, response_status, response_reason, response_text)
@@ -232,25 +299,6 @@ def request_json_with_headers(
     return payload, response_headers
 
 
-def request_json(
-    raw_url: str,
-    *,
-    headers: Optional[Dict[str, str]] = None,
-    method: str = "GET",
-    data: Any = None,
-    timeout: int = 30,
-    allowed_hosts: Optional[Set[str]] = None,
-    allowed_host_suffixes: Optional[Set[str]] = None,
-    strip_query: bool = False,
-) -> Any:
-    payload, _ = request_json_with_headers(
-        raw_url,
-        headers=headers,
-        method=method,
-        data=data,
-        timeout=timeout,
-        allowed_hosts=allowed_hosts,
-        allowed_host_suffixes=allowed_host_suffixes,
-        strip_query=strip_query,
-    )
+def request_json(raw_url: str, **kwargs: Any) -> Any:
+    payload, _ = request_json_with_headers(raw_url, **kwargs)
     return payload

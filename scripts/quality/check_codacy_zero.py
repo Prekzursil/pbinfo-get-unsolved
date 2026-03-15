@@ -7,9 +7,10 @@ import json
 import sys
 import time
 import urllib.parse
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 
 def _load_security_helpers():
@@ -26,10 +27,47 @@ _security_helpers = _load_security_helpers()
 HttpsStatusError = _security_helpers.HttpsStatusError
 normalize_https_url = _security_helpers.normalize_https_url
 request_json = _security_helpers.request_json
-
+safe_output_path = _security_helpers.safe_output_path
 
 TOTAL_KEYS = {"total", "totalItems", "total_items", "count", "hits", "open_issues"}
 CODACY_API_BASE = "https://api.codacy.com"
+
+
+@dataclass(frozen=True)
+class _CodacyContext:
+    api_base: str
+    token: str
+    owner: str
+    repo: str
+    providers: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class _BranchGateOptions:
+    branch: str
+    expected_sha: str
+    timeout_seconds: int
+    poll_seconds: int
+
+
+@dataclass(frozen=True)
+class _ProviderResponse:
+    passed: bool
+    not_found: bool
+    open_issues: Optional[int]
+    findings: tuple[str, ...]
+    selected_branch: str = ""
+    analysed_sha: str = ""
+    error: Optional[Exception] = None
+
+
+@dataclass(frozen=True)
+class _GateOutcome:
+    status: str
+    open_issues: Optional[int]
+    findings: tuple[str, ...]
+    selected_branch: str = ""
+    analysed_sha: str = ""
 
 
 def _parse_args() -> argparse.Namespace:
@@ -81,41 +119,22 @@ def _request_json(
     )
 
 
-def _coerce_total_value(value: Any) -> Optional[int]:
-    if isinstance(value, (int, float)):
-        return int(value)
-    return None
-
-
-def _extract_total_from_values(values: Any) -> Optional[int]:
-    for value in values:
-        total = extract_total_open(value)
-        if total is not None:
-            return total
-    return None
-
-
-def _extract_total_from_mapping(payload: Dict[str, Any]) -> Optional[int]:
-    for key, value in payload.items():
-        if key not in TOTAL_KEYS:
-            continue
-        coerced_total = _coerce_total_value(value)
-        if coerced_total is not None:
-            return coerced_total
-
-    for key in ("pagination", "page", "meta"):
-        total = extract_total_open(payload.get(key))
-        if total is not None:
-            return total
-
-    return _extract_total_from_values(payload.values())
-
-
 def extract_total_open(payload: Any) -> Optional[int]:
-    if isinstance(payload, dict):
-        return _extract_total_from_mapping(payload)
-    if isinstance(payload, list):
-        return _extract_total_from_values(payload)
+    stack = [payload]
+    while stack:
+        current = stack.pop()
+        if isinstance(current, dict):
+            for key, value in current.items():
+                if key in TOTAL_KEYS and isinstance(value, (int, float)):
+                    return int(value)
+
+            prioritized = [current.get(key) for key in ("pagination", "page", "meta")]
+            nested = [value for value in prioritized if value is not None] + list(current.values())
+            for value in reversed(nested):
+                stack.append(value)
+        elif isinstance(current, list):
+            for value in reversed(current):
+                stack.append(value)
     return None
 
 
@@ -180,215 +199,170 @@ def _render_md(payload: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _safe_output_path(raw: str, fallback: str, base: Optional[Path] = None) -> Path:
-    root = (base or Path.cwd()).resolve()
-    candidate = Path((raw or "").strip() or fallback).expanduser()
-    if not candidate.is_absolute():
-        candidate = root / candidate
-    resolved = candidate.resolve(strict=False)
-    try:
-        resolved.relative_to(root)
-    except ValueError as exc:
-        raise ValueError(f"Output path escapes workspace root: {candidate}") from exc
-    return resolved
-
-
-def _build_repository_url(api_base: str, provider: str, owner: str, repo: str, branch: str) -> str:
+def _build_repository_url(context: _CodacyContext, provider: str, branch: str) -> str:
     query = urllib.parse.urlencode({"branch": branch})
-    return f"{api_base}/api/v3/analysis/organizations/{provider}/{owner}/repositories/{repo}?{query}"
+    return f"{context.api_base}/api/v3/analysis/organizations/{provider}/{context.owner}/repositories/{context.repo}?{query}"
 
 
-def _build_backlog_url(api_base: str, provider: str, owner: str, repo: str) -> str:
+def _build_backlog_url(context: _CodacyContext, provider: str) -> str:
     query = urllib.parse.urlencode({"limit": "1"})
-    return f"{api_base}/api/v3/analysis/organizations/{provider}/{owner}/repositories/{repo}/issues/search?{query}"
+    return (
+        f"{context.api_base}/api/v3/analysis/organizations/{provider}/"
+        f"{context.owner}/repositories/{context.repo}/issues/search?{query}"
+    )
 
 
-def _provider_candidates(primary_provider: str) -> List[str]:
-    return list(dict.fromkeys(p for p in (primary_provider, "gh", "github") if p))
+def _provider_candidates(primary_provider: str) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(p for p in (primary_provider, "gh", "github") if p))
 
 
-def _build_branch_findings(
-    *,
-    branch: str,
-    expected_sha: str,
-    selected_branch: str,
-    analysed_sha: str,
-    open_issues: Optional[int],
-) -> List[str]:
+def _build_branch_findings(options: _BranchGateOptions, selected_branch: str, analysed_sha: str, open_issues: Optional[int]) -> tuple[str, ...]:
     if not selected_branch:
-        return ["Codacy branch lookup did not return a selected branch name."]
-    if selected_branch != branch:
-        return [f"Codacy selected branch {selected_branch!r} instead of the expected branch {branch!r}."]
-    if expected_sha and analysed_sha != expected_sha:
+        return ("Codacy branch lookup did not return a selected branch name.",)
+    if selected_branch != options.branch:
+        return (f"Codacy selected branch {selected_branch!r} instead of the expected branch {options.branch!r}.",)
+    if options.expected_sha and analysed_sha != options.expected_sha:
         observed = analysed_sha or "none"
-        return [f"Codacy branch analysis is stale: expected {expected_sha}, observed {observed}."]
+        return (f"Codacy branch analysis is stale: expected {options.expected_sha}, observed {observed}.",)
     if open_issues is None:
-        return ["Codacy branch response did not include a parseable issue count."]
+        return ("Codacy branch response did not include a parseable issue count.",)
     if open_issues != 0:
-        return [f"Codacy reports {open_issues} open issues for branch {branch!r} (expected 0)."]
-    return []
+        return (f"Codacy reports {open_issues} open issues for branch {options.branch!r} (expected 0).",)
+    return ()
 
 
-def _query_branch_provider(
-    *,
-    api_base: str,
-    token: str,
-    provider: str,
-    owner: str,
-    repo: str,
-    branch: str,
-    expected_sha: str,
-) -> Tuple[bool, bool, str, str, Optional[int], List[str], Optional[Exception]]:
-    url = _build_repository_url(api_base, provider, owner, repo, branch)
+def _query_branch_provider(context: _CodacyContext, provider: str, options: _BranchGateOptions) -> _ProviderResponse:
     try:
-        payload = _request_json(url, token)
+        payload = _request_json(_build_repository_url(context, provider, options.branch), context.token)
         selected_branch = extract_selected_branch_name(payload)
         analysed_sha = extract_last_analysed_sha(payload)
         open_issues = extract_repository_issue_count(payload)
-        findings = _build_branch_findings(
-            branch=branch,
-            expected_sha=expected_sha,
+        findings = _build_branch_findings(options, selected_branch, analysed_sha, open_issues)
+        return _ProviderResponse(
+            passed=not findings,
+            not_found=False,
+            open_issues=open_issues,
+            findings=findings,
             selected_branch=selected_branch,
             analysed_sha=analysed_sha,
-            open_issues=open_issues,
         )
-        return not findings, False, selected_branch, analysed_sha, open_issues, findings, None
     except HttpsStatusError as exc:
         if exc.status_code == 404:
-            return False, True, "", "", None, [], exc
-        return False, False, "", "", None, [f"Codacy API request failed: HTTP {exc.status_code}"], exc
+            return _ProviderResponse(False, True, None, (), error=exc)
+        return _ProviderResponse(False, False, None, (f"Codacy API request failed: HTTP {exc.status_code}",), error=exc)
     except (RuntimeError, ValueError, TypeError) as exc:  # pragma: no cover - network/runtime surface
-        return False, False, "", "", None, [f"Codacy API request failed: {exc}"], exc
+        return _ProviderResponse(False, False, None, (f"Codacy API request failed: {exc}",), error=exc)
 
 
-def _is_retryable_stale(*, expected_sha: str, findings: List[str], deadline: float) -> bool:
-    if not expected_sha:
+def _is_retryable_stale(options: _BranchGateOptions, findings: tuple[str, ...], deadline: float) -> bool:
+    if not options.expected_sha:
         return False
     if time.monotonic() >= deadline:
         return False
     return any("branch analysis is stale" in finding for finding in findings)
 
 
-def _build_missing_provider_findings(providers: List[str], last_exc: Optional[Exception]) -> List[str]:
-    findings = [f"Codacy API endpoint was not found for provider(s): {', '.join(providers)}."]
+def _build_missing_provider_findings(providers: tuple[str, ...], last_exc: Optional[Exception]) -> tuple[str, ...]:
+    findings: list[str] = [f"Codacy API endpoint was not found for provider(s): {', '.join(providers)}."]
     if last_exc is not None:
         findings.append(f"Last Codacy API error: {last_exc}")
-    return findings
+    return tuple(findings)
 
 
-def _query_branch_providers_once(
-    *,
-    api_base: str,
-    token: str,
-    providers: List[str],
-    repository: Tuple[str, str],
-    branch: str,
-    expected_sha: str,
-    deadline: float,
-) -> Tuple[str, Optional[int], str, str, List[str]]:
-    owner, repo = repository
+def _query_branch_providers_once(context: _CodacyContext, options: _BranchGateOptions, deadline: float) -> _GateOutcome:
     last_exc: Optional[Exception] = None
-
-    for provider in providers:
-        provider_passed, provider_not_found, selected_branch, analysed_sha, open_issues, findings, provider_error = (
-            _query_branch_provider(
-                api_base=api_base,
-                token=token,
-                provider=provider,
-                owner=owner,
-                repo=repo,
-                branch=branch,
-                expected_sha=expected_sha,
+    for provider in context.providers:
+        provider_response = _query_branch_provider(context, provider, options)
+        last_exc = provider_response.error
+        if provider_response.not_found:
+            continue
+        if provider_response.passed:
+            return _GateOutcome(
+                status="pass",
+                open_issues=provider_response.open_issues,
+                findings=(),
+                selected_branch=provider_response.selected_branch,
+                analysed_sha=provider_response.analysed_sha,
             )
+        if _is_retryable_stale(options, provider_response.findings, deadline):
+            return _GateOutcome(
+                status="retry",
+                open_issues=provider_response.open_issues,
+                findings=provider_response.findings,
+                selected_branch=provider_response.selected_branch,
+                analysed_sha=provider_response.analysed_sha,
+            )
+        return _GateOutcome(
+            status="fail",
+            open_issues=provider_response.open_issues,
+            findings=provider_response.findings,
+            selected_branch=provider_response.selected_branch,
+            analysed_sha=provider_response.analysed_sha,
         )
-        last_exc = provider_error
-        if provider_not_found:
-            continue
-        if provider_passed:
-            return "pass", open_issues, selected_branch, analysed_sha, []
-        if _is_retryable_stale(expected_sha=expected_sha, findings=findings, deadline=deadline):
-            return "retry", open_issues, selected_branch, analysed_sha, findings
-        return "fail", open_issues, selected_branch, analysed_sha, findings
 
-    return "fail", None, "", "", _build_missing_provider_findings(providers, last_exc)
+    return _GateOutcome("fail", None, _build_missing_provider_findings(context.providers, last_exc))
 
 
-
-def _poll_branch_zero_gate(
-    *,
-    api_base: str,
-    token: str,
-    providers: List[str],
-    repository: Tuple[str, str],
-    branch: str,
-    expected_sha: str,
-    timeout_seconds: int,
-    poll_seconds: int,
-) -> Tuple[str, Optional[int], str, str, List[str]]:
-    deadline = time.monotonic() + max(timeout_seconds, 0)
-
+def _poll_branch_zero_gate(context: _CodacyContext, options: _BranchGateOptions) -> _GateOutcome:
+    deadline = time.monotonic() + max(options.timeout_seconds, 0)
     while True:
-        status, open_issues, selected_branch, analysed_sha, findings = _query_branch_providers_once(
-            api_base=api_base,
-            token=token,
-            providers=providers,
-            repository=repository,
-            branch=branch,
-            expected_sha=expected_sha,
-            deadline=deadline,
-        )
-        if status == "pass":
-            return "pass", open_issues, selected_branch, analysed_sha, []
-        if status == "retry":
-            time.sleep(max(poll_seconds, 1))
+        outcome = _query_branch_providers_once(context, options, deadline)
+        if outcome.status == "pass":
+            return _GateOutcome(
+                status="pass",
+                open_issues=outcome.open_issues,
+                findings=(),
+                selected_branch=outcome.selected_branch,
+                analysed_sha=outcome.analysed_sha,
+            )
+        if outcome.status == "retry":
+            time.sleep(max(options.poll_seconds, 1))
             continue
-        return "fail", open_issues, selected_branch, analysed_sha, findings
+        return _GateOutcome(
+            status="fail",
+            open_issues=outcome.open_issues,
+            findings=outcome.findings,
+            selected_branch=outcome.selected_branch,
+            analysed_sha=outcome.analysed_sha,
+        )
 
 
-def _build_backlog_findings(open_issues: Optional[int]) -> List[str]:
+def _build_backlog_findings(open_issues: Optional[int]) -> tuple[str, ...]:
     if open_issues is None:
-        return ["Codacy response did not include a parseable total issue count."]
+        return ("Codacy response did not include a parseable total issue count.",)
     if open_issues != 0:
-        return [f"Codacy reports {open_issues} open issues (expected 0)."]
-    return []
+        return (f"Codacy reports {open_issues} open issues (expected 0).",)
+    return ()
 
 
-def _query_backlog_provider(
-    *, api_base: str, token: str, provider: str, owner: str, repo: str
-) -> Tuple[bool, bool, Optional[int], List[str], Optional[Exception]]:
-    url = _build_backlog_url(api_base, provider, owner, repo)
+def _query_backlog_provider(context: _CodacyContext, provider: str) -> _ProviderResponse:
     try:
-        payload = _request_json(url, token, method="POST", data={})
+        payload = _request_json(_build_backlog_url(context, provider), context.token, method="POST", data={})
         open_issues = extract_total_open(payload)
         findings = _build_backlog_findings(open_issues)
-        return not findings, False, open_issues, findings, None
+        return _ProviderResponse(not findings, False, open_issues, findings)
     except HttpsStatusError as exc:
         if exc.status_code == 404:
-            return False, True, None, [], exc
-        return False, False, None, [f"Codacy API request failed: HTTP {exc.status_code}"], exc
+            return _ProviderResponse(False, True, None, (), error=exc)
+        return _ProviderResponse(False, False, None, (f"Codacy API request failed: HTTP {exc.status_code}",), error=exc)
     except (RuntimeError, ValueError, TypeError) as exc:  # pragma: no cover - network/runtime surface
-        return False, False, None, [f"Codacy API request failed: {exc}"], exc
+        return _ProviderResponse(False, False, None, (f"Codacy API request failed: {exc}",), error=exc)
 
 
-def _check_repository_backlog_zero(
-    *, api_base: str, token: str, providers: List[str], owner: str, repo: str
-) -> Tuple[str, Optional[int], List[str]]:
+def _check_repository_backlog_zero(context: _CodacyContext) -> _GateOutcome:
     last_exc: Optional[Exception] = None
-
-    for provider in providers:
-        provider_passed, provider_not_found, open_issues, findings, provider_error = _query_backlog_provider(
-            api_base=api_base,
-            token=token,
-            provider=provider,
-            owner=owner,
-            repo=repo,
-        )
-        last_exc = provider_error
-        if provider_not_found:
+    for provider in context.providers:
+        provider_response = _query_backlog_provider(context, provider)
+        last_exc = provider_response.error
+        if provider_response.not_found:
             continue
-        return ("pass" if provider_passed else "fail"), open_issues, findings
+        return _GateOutcome(
+            status="pass" if provider_response.passed else "fail",
+            open_issues=provider_response.open_issues,
+            findings=provider_response.findings,
+        )
 
-    return "fail", None, _build_missing_provider_findings(providers, last_exc)
+    return _GateOutcome("fail", None, _build_missing_provider_findings(context.providers, last_exc))
 
 
 def main() -> int:
@@ -396,51 +370,49 @@ def main() -> int:
 
     args = _parse_args()
     token = (args.token or os.environ.get("CODACY_API_TOKEN", "")).strip()
-    api_base = normalize_https_url(CODACY_API_BASE, allowed_hosts={"api.codacy.com"}).rstrip("/")
-    owner = urllib.parse.quote(args.owner.strip(), safe="")
-    repo = urllib.parse.quote(args.repo.strip(), safe="")
-    branch = (args.branch or "").strip()
-    expected_sha = (args.expected_sha or "").strip()
+    context = _CodacyContext(
+        api_base=normalize_https_url(CODACY_API_BASE, allowed_hosts={"api.codacy.com"}).rstrip("/"),
+        token=token,
+        owner=urllib.parse.quote(args.owner.strip(), safe=""),
+        repo=urllib.parse.quote(args.repo.strip(), safe=""),
+        providers=_provider_candidates(args.provider),
+    )
 
-    findings: List[str] = []
+    branch_options = _BranchGateOptions(
+        branch=(args.branch or "").strip(),
+        expected_sha=(args.expected_sha or "").strip(),
+        timeout_seconds=args.timeout_seconds,
+        poll_seconds=args.poll_seconds,
+    )
+
     open_issues: Optional[int] = None
     selected_branch = ""
     analysed_sha = ""
+    findings: list[str] = []
 
     if not token:
-        findings.append("CODACY_API_TOKEN is missing.")
         status = "fail"
+        findings.append("CODACY_API_TOKEN is missing.")
     else:
-        providers = _provider_candidates(args.provider)
-        repository = (owner, repo)
-        if branch:
-            status, open_issues, selected_branch, analysed_sha, findings = _poll_branch_zero_gate(
-                api_base=api_base,
-                token=token,
-                providers=providers,
-                repository=repository,
-                branch=branch,
-                expected_sha=expected_sha,
-                timeout_seconds=args.timeout_seconds,
-                poll_seconds=args.poll_seconds,
-            )
+        if branch_options.branch:
+            outcome = _poll_branch_zero_gate(context, branch_options)
         else:
-            status, open_issues, findings = _check_repository_backlog_zero(
-                api_base=api_base,
-                token=token,
-                providers=providers,
-                owner=owner,
-                repo=repo,
-            )
+            outcome = _check_repository_backlog_zero(context)
+
+        status = outcome.status
+        open_issues = outcome.open_issues
+        selected_branch = outcome.selected_branch
+        analysed_sha = outcome.analysed_sha
+        findings.extend(outcome.findings)
 
     payload = {
         "status": status,
         "owner": args.owner,
         "repo": args.repo,
         "provider": args.provider,
-        "branch": branch,
+        "branch": branch_options.branch,
         "selected_branch": selected_branch,
-        "expected_sha": expected_sha,
+        "expected_sha": branch_options.expected_sha,
         "analysed_sha": analysed_sha,
         "open_issues": open_issues,
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
@@ -448,8 +420,8 @@ def main() -> int:
     }
 
     try:
-        out_json = _safe_output_path(args.out_json, "codacy-zero/codacy.json")
-        out_md = _safe_output_path(args.out_md, "codacy-zero/codacy.md")
+        out_json = safe_output_path(args.out_json, "codacy-zero/codacy.json")
+        out_md = safe_output_path(args.out_md, "codacy-zero/codacy.md")
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1

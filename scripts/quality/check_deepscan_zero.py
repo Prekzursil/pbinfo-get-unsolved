@@ -4,6 +4,7 @@ import argparse
 import importlib.util
 import json
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -22,8 +23,15 @@ def _load_security_helpers():
 _security_helpers = _load_security_helpers()
 normalize_https_url = _security_helpers.normalize_https_url
 request_json = _security_helpers.request_json
+safe_output_path = _security_helpers.safe_output_path
 
 TOTAL_KEYS = {"total", "totalItems", "total_items", "count", "hits", "open_issues"}
+
+
+@dataclass(frozen=True)
+class _DeepScanGateResult:
+    open_issues: int | None
+    findings: list[str]
 
 
 def _parse_args() -> argparse.Namespace:
@@ -35,19 +43,18 @@ def _parse_args() -> argparse.Namespace:
 
 
 def extract_total_open(payload: Any) -> int | None:
-    if isinstance(payload, dict):
-        for key, value in payload.items():
-            if key in TOTAL_KEYS and isinstance(value, (int, float)):
-                return int(value)
-        for nested in payload.values():
-            total = extract_total_open(nested)
-            if total is not None:
-                return total
-    elif isinstance(payload, list):
-        for nested in payload:
-            total = extract_total_open(nested)
-            if total is not None:
-                return total
+    stack = [payload]
+    while stack:
+        current = stack.pop()
+        if isinstance(current, dict):
+            for key, value in current.items():
+                if key in TOTAL_KEYS and isinstance(value, (int, float)):
+                    return int(value)
+            for nested in reversed(list(current.values())):
+                stack.append(nested)
+        elif isinstance(current, list):
+            for nested in reversed(current):
+                stack.append(nested)
     return None
 
 
@@ -82,28 +89,9 @@ def _render_md(payload: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _safe_output_path(raw: str, fallback: str, base: Path | None = None) -> Path:
-    root = (base or Path.cwd()).resolve()
-    candidate = Path((raw or "").strip() or fallback).expanduser()
-    if not candidate.is_absolute():
-        candidate = root / candidate
-    resolved = candidate.resolve(strict=False)
-    try:
-        resolved.relative_to(root)
-    except ValueError as exc:
-        raise ValueError(f"Output path escapes workspace root: {candidate}") from exc
-    return resolved
-
-
-def main() -> int:
-    import os
-
-    args = _parse_args()
-    token = (args.token or os.environ.get("DEEPSCAN_API_TOKEN", "")).strip()
-    open_issues_url = os.environ.get("DEEPSCAN_OPEN_ISSUES_URL", "").strip()
-
+def _validate_inputs(token: str, raw_open_issues_url: str) -> tuple[str, list[str]]:
     findings: list[str] = []
-    open_issues: int | None = None
+    open_issues_url = raw_open_issues_url.strip()
 
     if not token:
         findings.append("DEEPSCAN_API_TOKEN is missing.")
@@ -111,27 +99,44 @@ def main() -> int:
         findings.append("DEEPSCAN_OPEN_ISSUES_URL is missing.")
     else:
         try:
-            open_issues_url = normalize_https_url(
-                open_issues_url,
-                allowed_host_suffixes={"deepscan.io"},
-            )
+            open_issues_url = normalize_https_url(open_issues_url, allowed_host_suffixes={"deepscan.io"})
         except ValueError as exc:
             findings.append(str(exc))
 
-    status = "fail"
-    if not findings:
-        try:
-            payload = _request_json(open_issues_url, token)
-            open_issues = extract_total_open(payload)
-            if open_issues is None:
-                findings.append("DeepScan response did not include a parseable total issue count.")
-            elif open_issues != 0:
-                findings.append(f"DeepScan reports {open_issues} open issues (expected 0).")
-            status = "pass" if not findings else "fail"
-        except Exception as exc:  # pragma: no cover - network/runtime surface
-            findings.append(f"DeepScan API request failed: {exc}")
-            status = "fail"
+    return open_issues_url, findings
 
+
+def _evaluate_gate(open_issues_url: str, token: str) -> _DeepScanGateResult:
+    findings: list[str] = []
+    try:
+        payload = _request_json(open_issues_url, token)
+    except Exception as exc:  # pragma: no cover - network/runtime surface
+        findings.append(f"DeepScan API request failed: {exc}")
+        return _DeepScanGateResult(open_issues=None, findings=findings)
+
+    open_issues = extract_total_open(payload)
+    if open_issues is None:
+        findings.append("DeepScan response did not include a parseable total issue count.")
+    elif open_issues != 0:
+        findings.append(f"DeepScan reports {open_issues} open issues (expected 0).")
+
+    return _DeepScanGateResult(open_issues=open_issues, findings=findings)
+
+
+def main() -> int:
+    import os
+
+    args = _parse_args()
+    token = (args.token or os.environ.get("DEEPSCAN_API_TOKEN", "")).strip()
+    open_issues_url, findings = _validate_inputs(token, os.environ.get("DEEPSCAN_OPEN_ISSUES_URL", ""))
+
+    open_issues: int | None = None
+    if not findings:
+        gate_result = _evaluate_gate(open_issues_url, token)
+        findings.extend(gate_result.findings)
+        open_issues = gate_result.open_issues
+
+    status = "pass" if not findings else "fail"
     payload = {
         "status": status,
         "open_issues": open_issues,
@@ -141,8 +146,8 @@ def main() -> int:
     }
 
     try:
-        out_json = _safe_output_path(args.out_json, "deepscan-zero/deepscan.json")
-        out_md = _safe_output_path(args.out_md, "deepscan-zero/deepscan.md")
+        out_json = safe_output_path(args.out_json, "deepscan-zero/deepscan.json")
+        out_md = safe_output_path(args.out_md, "deepscan-zero/deepscan.md")
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
