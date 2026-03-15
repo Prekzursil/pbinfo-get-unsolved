@@ -631,7 +631,20 @@ const RUNTIME_REHYDRATE_MIGRATED_SNAPSHOT = {
 };
 
 function cloneRuntimeRehydrateSnapshot() {
-  return JSON.parse(JSON.stringify(RUNTIME_REHYDRATE_MIGRATED_SNAPSHOT));
+  return {
+    ...RUNTIME_REHYDRATE_MIGRATED_SNAPSHOT,
+    verification: { ...RUNTIME_REHYDRATE_MIGRATED_SNAPSHOT.verification },
+    cachePolicy: { ...RUNTIME_REHYDRATE_MIGRATED_SNAPSHOT.cachePolicy },
+    filters: {
+      ...RUNTIME_REHYDRATE_MIGRATED_SNAPSHOT.filters,
+      statuses: [...RUNTIME_REHYDRATE_MIGRATED_SNAPSHOT.filters.statuses],
+      qualities: [...RUNTIME_REHYDRATE_MIGRATED_SNAPSHOT.filters.qualities],
+    },
+    sorted: { ...RUNTIME_REHYDRATE_MIGRATED_SNAPSHOT.sorted },
+    pageQueue: [...RUNTIME_REHYDRATE_MIGRATED_SNAPSHOT.pageQueue],
+    deferred: RUNTIME_REHYDRATE_MIGRATED_SNAPSHOT.deferred.map((entry) => [...entry]),
+    inFlightPages: [...RUNTIME_REHYDRATE_MIGRATED_SNAPSHOT.inFlightPages],
+  };
 }
 
 function createRuntimeRehydrateMutableState() {

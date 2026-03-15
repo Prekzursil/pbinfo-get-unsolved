@@ -81,30 +81,41 @@ def _request_json(
     )
 
 
+def _coerce_total_value(value: Any) -> Optional[int]:
+    if isinstance(value, (int, float)):
+        return int(value)
+    return None
+
+
+def _extract_total_from_values(values: Any) -> Optional[int]:
+    for value in values:
+        total = extract_total_open(value)
+        if total is not None:
+            return total
+    return None
+
+
+def _extract_total_from_mapping(payload: Dict[str, Any]) -> Optional[int]:
+    for key, value in payload.items():
+        if key not in TOTAL_KEYS:
+            continue
+        coerced_total = _coerce_total_value(value)
+        if coerced_total is not None:
+            return coerced_total
+
+    for key in ("pagination", "page", "meta"):
+        total = extract_total_open(payload.get(key))
+        if total is not None:
+            return total
+
+    return _extract_total_from_values(payload.values())
+
+
 def extract_total_open(payload: Any) -> Optional[int]:
     if isinstance(payload, dict):
-        for key, value in payload.items():
-            if key in TOTAL_KEYS and isinstance(value, (int, float)):
-                return int(value)
-
-        # common pagination structures
-        for key in ("pagination", "page", "meta"):
-            nested = payload.get(key)
-            total = extract_total_open(nested)
-            if total is not None:
-                return total
-
-        for value in payload.values():
-            total = extract_total_open(value)
-            if total is not None:
-                return total
-
+        return _extract_total_from_mapping(payload)
     if isinstance(payload, list):
-        for item in payload:
-            total = extract_total_open(item)
-            if total is not None:
-                return total
-
+        return _extract_total_from_values(payload)
     return None
 
 
