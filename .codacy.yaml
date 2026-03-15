@@ -2,4 +2,9 @@ exclude_paths:
   - coverage/**
   - coverage-100/**
   - dist/**
+  - node_modules/**
+  - .tmp*/**
   - package-lock.json
+  - npm-shrinkwrap.json
+  - pnpm-lock.yaml
+  - yarn.lock

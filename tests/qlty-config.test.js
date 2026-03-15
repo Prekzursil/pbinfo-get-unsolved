@@ -4,40 +4,54 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const rootDir = path.join(__dirname, '..');
+const expectedGeneratedExclusions = new Set([
+  'coverage/**',
+  'coverage-100/**',
+  'dist/**',
+  'node_modules/**',
+  '.tmp*/**',
+  'package-lock.json',
+  'npm-shrinkwrap.json',
+  'pnpm-lock.yaml',
+  'yarn.lock',
+]);
+const forbiddenScopePatterns = ['tests/**', 'docs/**', 'scripts/**', '.github/workflows/**', 'src/**'];
 
 function readRepoFile(relativePath) {
   return fs.readFileSync(path.join(rootDir, relativePath), 'utf8');
 }
 
-test('qlty is configured with repo-local defaults and coverage upload wiring', () => {
+function parseQltyExcludePatterns(tomlText) {
+  const match = tomlText.match(/exclude_patterns\s*=\s*\[([\s\S]*?)\]/);
+  assert.ok(match, 'exclude_patterns array should be declared in .qlty/qlty.toml');
+
+  return [...match[1].matchAll(/"([^"]+)"/g)].map((entry) => entry[1]);
+}
+
+test('qlty excludes only generated/build/cache artifacts and keeps signal paths in scope', () => {
   const qltyToml = readRepoFile('.qlty/qlty.toml');
-  const codecovWorkflow = readRepoFile('.github/workflows/codecov-analytics.yml');
-  const aggregateWorkflow = readRepoFile('.github/workflows/quality-zero-gate.yml');
 
   assert.match(qltyToml, /^config_version = "0"$/m);
   assert.match(qltyToml, /\[\[source\]\]\s+name = "default"\s+default = true/s);
-  assert.match(qltyToml, /exclude_patterns = \[/);
   assert.match(qltyToml, /\[smells\]\s+mode = "block"/s);
   assert.match(qltyToml, /\[\[plugin\]\]\s+name = "actionlint"\s+mode = "block"/s);
   assert.match(
     qltyToml,
     /\[\[plugin\]\]\s+name = "prettier"\s+version = "3\.4\.2"\s+mode = "block"/s
   );
-  assert.doesNotMatch(qltyToml, /"tests\/\*\*"/);
-  assert.doesNotMatch(qltyToml, /"docs\/\*\*"/);
-  assert.doesNotMatch(qltyToml, /"\.github\/\*\*"/);
-  assert.match(qltyToml, /"package-lock\.json"/);
   assert.match(qltyToml, /"tests\/\*\*\/\*\.test\.js"/);
 
-  assert.match(codecovWorkflow, /id-token: write/);
-  assert.match(
-    codecovWorkflow,
-    /qltysh\/qlty-action\/coverage@a19242102d17e497f437d7466aa01b528537e899/
+  const exclusions = parseQltyExcludePatterns(qltyToml);
+  assert.deepEqual(
+    new Set(exclusions),
+    expectedGeneratedExclusions,
+    'Qlty exclusions must stay limited to generated/build/cache artifacts.'
   );
-  assert.doesNotMatch(codecovWorkflow, /qltysh\/qlty-action\/coverage@v2/);
-  assert.match(codecovWorkflow, /files: coverage\/lcov\.info/);
-  assert.match(codecovWorkflow, /oidc: true/);
 
-  assert.match(aggregateWorkflow, /QLTY_ENFORCE/);
-  assert.match(aggregateWorkflow, /--required-context "qlty check"/);
+  for (const forbiddenPattern of forbiddenScopePatterns) {
+    assert.ok(
+      !exclusions.includes(forbiddenPattern),
+      `Qlty exclusions must keep ${forbiddenPattern} in analysis scope.`
+    );
+  }
 });

@@ -7,6 +7,9 @@ exclude_patterns = [
   "node_modules/**",
   ".tmp*/**",
   "package-lock.json",
+  "npm-shrinkwrap.json",
+  "pnpm-lock.yaml",
+  "yarn.lock",
 ]
 
 test_patterns = [
