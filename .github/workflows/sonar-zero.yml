@@ -14,18 +14,22 @@ jobs:
   sonar-zero:
     name: Sonar Zero
     runs-on: ubuntu-latest
+    env:
+      QUALITY_CHECK_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Wait for SonarCloud PR analysis context
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 scripts/quality/check_required_checks.py             --repo "${GITHUB_REPOSITORY}"             --sha "${QUALITY_CHECK_SHA}"             --required-context "SonarCloud Code Analysis"             --timeout-seconds 1200             --poll-seconds 20             --out-json "sonar-zero/required-contexts.json"             --out-md "sonar-zero/required-contexts.md"
       - name: Assert Sonar zero-open gate
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_PULL_REQUEST: ${{ github.event.pull_request.number || '' }}
         run: |
-          python3 scripts/quality/check_sonar_zero.py \
-            --project-key "Prekzursil_pbinfo-get-unsolved" \
-            --pull-request "${SONAR_PULL_REQUEST}" \
-            --out-json "sonar-zero/sonar.json" \
-            --out-md "sonar-zero/sonar.md"
+          python3 scripts/quality/check_sonar_zero.py             --project-key "Prekzursil_pbinfo-get-unsolved"             --pull-request "${SONAR_PULL_REQUEST}"             --out-json "sonar-zero/sonar.json"             --out-md "sonar-zero/sonar.md"
       - name: Upload Sonar artifacts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
