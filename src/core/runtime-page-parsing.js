@@ -61,14 +61,6 @@ function readProblemRecordMetadata(metadata = {}) {
   };
 }
 
-function buildProblemRecordInput({ problem = {}, scoreInfo, metadata = {} } = {}) {
-  return {
-    problem,
-    scoreInfo,
-    metadata,
-  };
-}
-
 function buildProblemRecord(problemData = {}) {
   const scoreState = readProblemRecordScoreState(problemData.scoreInfo);
   const metadata = readProblemRecordMetadata(problemData.metadata);
@@ -142,25 +134,25 @@ function parseListProblemCard(card) {
   const scoreInfo = extractScoreInfoFromCard(card);
   const status = classifyProblemStatus(scoreInfo);
 
+  const problemRecordData = {
+    problem: { id, name, link, difficulty, status },
+    scoreInfo,
+    metadata: {
+      postedBy_link,
+      postedBy_name,
+      postedBy_img,
+      author,
+      source,
+    },
+  };
+
   return {
     kind: 'ok',
     id,
     scoreInfo,
     status,
     parseFailed: scoreInfo.candidates.length === 0,
-    problem: buildProblemRecord(
-      buildProblemRecordInput({
-        problem: { id, name, link, difficulty, status },
-        scoreInfo,
-        metadata: {
-          postedBy_link,
-          postedBy_name,
-          postedBy_img,
-          author,
-          source,
-        },
-      })
-    ),
+    problem: buildProblemRecord(problemRecordData),
   };
 }
 
@@ -176,31 +168,31 @@ function parseIdRangeProblemPage({ pageDoc, pageIndex, knownIdRangeScore, locati
       : rawScoreInfo;
   const status = classifyProblemStatus(scoreInfo);
 
+  const problemRecordData = {
+    problem: {
+      id: pageIndex,
+      name: meta.name,
+      link,
+      difficulty: meta.difficulty,
+      status,
+    },
+    scoreInfo,
+    metadata: {
+      postedBy_link: meta.postedBy_link,
+      postedBy_name: meta.postedBy_name,
+      postedBy_img: meta.postedBy_img,
+      author: meta.author,
+      source: meta.source,
+    },
+  };
+
   return {
     link,
     meta,
     scoreInfo,
     status,
     hasUserScoreNode: pageDoc.querySelector('#scor_utilizator_problema') != null,
-    problem: buildProblemRecord(
-      buildProblemRecordInput({
-        problem: {
-          id: pageIndex,
-          name: meta.name,
-          link,
-          difficulty: meta.difficulty,
-          status,
-        },
-        scoreInfo,
-        metadata: {
-          postedBy_link: meta.postedBy_link,
-          postedBy_name: meta.postedBy_name,
-          postedBy_img: meta.postedBy_img,
-          author: meta.author,
-          source: meta.source,
-        },
-      })
-    ),
+    problem: buildProblemRecord(problemRecordData),
   };
 }
 
@@ -214,18 +206,18 @@ function createIdRangeProblemFromKnownScore({ problemId, scoreValue, locationOri
     maxScore,
   };
   const status = scoreValue >= maxScore ? 'solved' : 'tried';
-  return buildProblemRecord(
-    buildProblemRecordInput({
-      problem: {
-        id: problemId,
-        name: '',
-        link: resolveProblemLink(problemId, null, locationOrigin),
-        difficulty: 3,
-        status,
-      },
-      scoreInfo,
-    })
-  );
+  const problemRecordData = {
+    problem: {
+      id: problemId,
+      name: '',
+      link: resolveProblemLink(problemId, null, locationOrigin),
+      difficulty: 3,
+      status,
+    },
+    scoreInfo,
+  };
+
+  return buildProblemRecord(problemRecordData);
 }
 
 module.exports = {
