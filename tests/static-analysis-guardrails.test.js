@@ -98,6 +98,7 @@ test('static-analysis guardrails: no known Semgrep-triggering patterns remain in
   assert.doesNotMatch(scoreParsing, /\/\w\/\.(?:test|exec)\(/);
   assert.doesNotMatch(runtime, /\.innerHTML\s*=/);
   assert.doesNotMatch(runtimePageParsing, /function createProblemRecord\(/);
+  assert.doesNotMatch(runtimePageParsing, /\bbuildProblemRecord\(\{/);
   assert.doesNotMatch(runtimeStorageSetup, /function updateSetupWizardView\(\s*\{/);
   assert.ok(
     countNonCommentLines(runtimeStorageSetup) <= 500,
