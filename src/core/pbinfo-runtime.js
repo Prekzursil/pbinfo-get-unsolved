@@ -191,11 +191,7 @@ async function copyVisibleProblemsToClipboard({
   }
 }
 
-function appendClipboardCopyButton({
-  group,
-  buttonLabel,
-  onCopy,
-}) {
+function appendClipboardCopyButton({ group, buttonLabel, onCopy }) {
   const button = document.createElement('button');
   button.textContent = buttonLabel;
   button.addEventListener('click', onCopy);
@@ -279,10 +275,7 @@ function isRuntimeQueueDrained({
   return checks.every(Boolean);
 }
 
-function shouldStartVerificationPass({
-  verificationState,
-  hasUnsolvedProblems,
-}) {
+function shouldStartVerificationPass({ verificationState, hasUnsolvedProblems }) {
   return (
     !verificationState.running &&
     verificationState.enabled &&
@@ -490,7 +483,6 @@ function resolvePageLinkSelection({ setupSelection, scanMode, config, defaultLin
   }
   return resolveListPromptPageLink(defaultLink, config);
 }
-
 
 function setSelectOptions(select, options) {
   select.replaceChildren();

@@ -15,7 +15,13 @@ const expectedGeneratedExclusions = new Set([
   'pnpm-lock.yaml',
   'yarn.lock',
 ]);
-const forbiddenScopePatterns = ['tests/**', 'docs/**', 'scripts/**', '.github/workflows/**', 'src/**'];
+const forbiddenScopePatterns = [
+  'tests/**',
+  'docs/**',
+  'scripts/**',
+  '.github/workflows/**',
+  'src/**',
+];
 
 function readRepoFile(relativePath) {
   return fs.readFileSync(path.join(rootDir, relativePath), 'utf8');

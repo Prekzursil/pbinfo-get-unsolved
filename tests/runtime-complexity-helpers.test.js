@@ -87,7 +87,6 @@ test('runtime complexity helpers: trust metrics model derives labels and counter
   assert.equal(view.metricDefinitions.length, 11);
 });
 
-
 test('runtime complexity helpers: pbinfo-runtime clipboard helpers format messages and guard branches', async () => {
   assert.equal(
     formatClipboardCopySuccessMessage(4, 'ID-uri', 'execCommand'),
