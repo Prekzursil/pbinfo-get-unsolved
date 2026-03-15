@@ -2,20 +2,26 @@
   'use strict';
 
   function setButtonStyles(button) {
-    button.style.position = 'fixed';
-    button.style.right = '16px';
-    button.style.bottom = '16px';
-    button.style.zIndex = '2147483647';
-    button.style.border = '1px solid rgba(0,0,0,0.25)';
-    button.style.borderRadius = '999px';
-    button.style.padding = '9px 14px';
-    button.style.fontSize = '13px';
-    button.style.lineHeight = '1';
-    button.style.fontFamily = 'system-ui,Segoe UI,Roboto,sans-serif';
-    button.style.background = '#0f172a';
-    button.style.color = '#f8fafc';
-    button.style.boxShadow = '0 4px 18px rgba(2,6,23,0.32)';
-    button.style.cursor = 'pointer';
+    const styleEntries = [
+      ['position', 'fixed'],
+      ['right', '16px'],
+      ['bottom', '16px'],
+      ['zIndex', '2147483647'],
+      ['border', '1px solid rgba(0,0,0,0.25)'],
+      ['borderRadius', '999px'],
+      ['padding', '9px 14px'],
+      ['fontSize', '13px'],
+      ['lineHeight', '1'],
+      ['fontFamily', 'system-ui,Segoe UI,Roboto,sans-serif'],
+      ['background', '#0f172a'],
+      ['color', '#f8fafc'],
+      ['boxShadow', '0 4px 18px rgba(2,6,23,0.32)'],
+      ['cursor', 'pointer'],
+    ];
+
+    for (const [property, value] of styleEntries) {
+      button.style[property] = value;
+    }
   }
 
   function isCallable(value) {

@@ -26,6 +26,16 @@ const {
   buildPageUnitLabel,
   classifyPageFetchResponse,
 } = require('../src/core/runtime-fetch-response');
+const {
+  formatClipboardCopySuccessMessage,
+  formatClipboardCopyErrorMessage,
+  copyVisibleProblemsToClipboard,
+  takeSmallestDeferredEntry,
+  selectKickAction,
+  isRuntimeQueueDrained,
+  shouldStartVerificationPass,
+  pruneSnapshotEntries,
+} = require('../src/core/pbinfo-runtime');
 
 test('runtime complexity helpers: trust metrics model derives labels and counters', () => {
   const view = buildTrustMetricsView({
@@ -75,6 +85,174 @@ test('runtime complexity helpers: trust metrics model derives labels and counter
   assert.equal(view.verificationLabel, 'gata');
   assert.equal(view.pauseText, ' · pauză sistem: rate-limit (2s)');
   assert.equal(view.metricDefinitions.length, 11);
+});
+
+
+test('runtime complexity helpers: pbinfo-runtime clipboard helpers format messages and guard branches', async () => {
+  assert.equal(
+    formatClipboardCopySuccessMessage(4, 'ID-uri', 'execCommand'),
+    'Am copiat 4 ID-uri în clipboard (fallback legacy copy).'
+  );
+  assert.equal(
+    formatClipboardCopySuccessMessage(2, 'link-uri', 'clipboard'),
+    'Am copiat 2 link-uri în clipboard.'
+  );
+  assert.match(
+    formatClipboardCopyErrorMessage('ID-urile', 'Denied'),
+    /Nu am putut copia ID-urile în clipboard\. Denied/
+  );
+
+  const logs = [];
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    await copyVisibleProblemsToClipboard({
+      getVisibleProblems: () => [{ id: 1 }],
+      toText: () => '',
+      copyTextToClipboard: async () => ({ method: 'clipboard' }),
+      addLog(message) {
+        logs.push(message);
+      },
+      describeClipboardError: () => 'unused',
+      successItemLabel: 'ID-uri',
+      failureItemLabel: 'ID-urile',
+    });
+
+    await copyVisibleProblemsToClipboard({
+      getVisibleProblems: () => [{ id: 1 }, { id: 2 }],
+      toText: () => '1\n2',
+      copyTextToClipboard: async () => ({ method: 'execCommand' }),
+      addLog(message) {
+        logs.push(message);
+      },
+      describeClipboardError: () => 'unused',
+      successItemLabel: 'ID-uri',
+      failureItemLabel: 'ID-urile',
+    });
+
+    await copyVisibleProblemsToClipboard({
+      getVisibleProblems: () => [{ id: 3 }],
+      toText: () => '3',
+      copyTextToClipboard: async () => {
+        throw new Error('denied');
+      },
+      addLog(message) {
+        logs.push(message);
+      },
+      describeClipboardError: () => 'Clipboard blocked',
+      successItemLabel: 'ID-uri',
+      failureItemLabel: 'ID-urile',
+    });
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(logs[0], 'Nimic de copiat.');
+  assert.equal(logs[1], 'Am copiat 2 ID-uri în clipboard (fallback legacy copy).');
+  assert.match(logs[2], /Clipboard blocked/);
+});
+
+test('runtime complexity helpers: deferred-map and kick selection helpers preserve priority ordering', () => {
+  const deferredPages = new Map([
+    [7, 2],
+    [3, 1],
+    [5, 4],
+  ]);
+  assert.deepEqual(takeSmallestDeferredEntry(deferredPages, 'pageIndex'), {
+    pageIndex: 3,
+    retryCount: 1,
+  });
+  assert.equal(deferredPages.has(3), false);
+
+  assert.deepEqual(
+    selectKickAction({
+      deferredVerification: { problemId: 12, retryCount: 1 },
+      deferredBatch: { batchStart: 200, retryCount: 0 },
+      deferredPage: { pageIndex: 8, retryCount: 0 },
+      queueInitialized: true,
+      nextSequentialPage: 9,
+    }),
+    {
+      kind: 'verify',
+      problemId: 12,
+      retryCount: 1,
+    }
+  );
+
+  assert.deepEqual(
+    selectKickAction({
+      deferredVerification: null,
+      deferredBatch: null,
+      deferredPage: null,
+      queueInitialized: false,
+      nextSequentialPage: 21,
+    }),
+    {
+      kind: 'sequential',
+      pageIndex: 21,
+    }
+  );
+});
+
+test('runtime complexity helpers: runtime idle verification gates and snapshot pruning stay deterministic', () => {
+  assert.equal(
+    isRuntimeQueueDrained({
+      queueInitialized: true,
+      pageQueueLength: 0,
+      deferredScoreBatchCount: 0,
+      deferredVerificationCount: 0,
+      inFlight: 0,
+    }),
+    true
+  );
+  assert.equal(
+    isRuntimeQueueDrained({
+      queueInitialized: true,
+      pageQueueLength: 1,
+      deferredScoreBatchCount: 0,
+      deferredVerificationCount: 0,
+      inFlight: 0,
+    }),
+    false
+  );
+
+  assert.equal(
+    shouldStartVerificationPass({
+      verificationState: { running: false, enabled: true, completed: false },
+      hasUnsolvedProblems: true,
+    }),
+    true
+  );
+  assert.equal(
+    shouldStartVerificationPass({
+      verificationState: { running: true, enabled: true, completed: false },
+      hasUnsolvedProblems: true,
+    }),
+    false
+  );
+
+  const pruneResult = pruneSnapshotEntries(
+    [
+      { id: 'a', storageVersion: 2 },
+      { id: 'b', storageVersion: 2 },
+      { id: 'c', storageVersion: 2 },
+    ],
+    {
+      maxEntries: 2,
+      snapshotItemKey(id) {
+        return `key-${id}`;
+      },
+      storageHasValue(key) {
+        return key !== 'key-b';
+      },
+    }
+  );
+
+  assert.deepEqual(
+    pruneResult.pruned.map((entry) => entry.id),
+    ['a', 'c']
+  );
+  assert.deepEqual(pruneResult.staleKeys, ['key-b']);
 });
 
 test('runtime complexity helpers: retry target extraction accepts supported targets only', () => {
@@ -542,4 +720,171 @@ test('runtime complexity helpers: persistence snapshot appliers handle invalid a
       searchQuery: '',
     }
   );
+});
+
+test('runtime complexity helpers: pbinfo-runtime clipboard helpers format messages and guard branches', async () => {
+  assert.equal(
+    formatClipboardCopySuccessMessage(4, 'ID-uri', 'execCommand'),
+    'Am copiat 4 ID-uri în clipboard (fallback legacy copy).'
+  );
+  assert.equal(
+    formatClipboardCopySuccessMessage(2, 'link-uri', 'clipboard'),
+    'Am copiat 2 link-uri în clipboard.'
+  );
+  assert.match(
+    formatClipboardCopyErrorMessage('ID-urile', 'Denied'),
+    /Nu am putut copia ID-urile în clipboard\. Denied/
+  );
+
+  const logs = [];
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    await copyVisibleProblemsToClipboard({
+      getVisibleProblems: () => [{ id: 1 }],
+      toText: () => '',
+      copyTextToClipboard: async () => ({ method: 'clipboard' }),
+      addLog(message) {
+        logs.push(message);
+      },
+      describeClipboardError: () => 'unused',
+      successItemLabel: 'ID-uri',
+      failureItemLabel: 'ID-urile',
+    });
+
+    await copyVisibleProblemsToClipboard({
+      getVisibleProblems: () => [{ id: 1 }, { id: 2 }],
+      toText: () => '1\n2',
+      copyTextToClipboard: async () => ({ method: 'execCommand' }),
+      addLog(message) {
+        logs.push(message);
+      },
+      describeClipboardError: () => 'unused',
+      successItemLabel: 'ID-uri',
+      failureItemLabel: 'ID-urile',
+    });
+
+    await copyVisibleProblemsToClipboard({
+      getVisibleProblems: () => [{ id: 3 }],
+      toText: () => '3',
+      copyTextToClipboard: async () => {
+        throw new Error('denied');
+      },
+      addLog(message) {
+        logs.push(message);
+      },
+      describeClipboardError: () => 'Clipboard blocked',
+      successItemLabel: 'ID-uri',
+      failureItemLabel: 'ID-urile',
+    });
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(logs[0], 'Nimic de copiat.');
+  assert.equal(logs[1], 'Am copiat 2 ID-uri în clipboard (fallback legacy copy).');
+  assert.match(logs[2], /Clipboard blocked/);
+});
+
+test('runtime complexity helpers: deferred-map and kick selection helpers preserve priority ordering', () => {
+  const deferredPages = new Map([
+    [7, 2],
+    [3, 1],
+    [5, 4],
+  ]);
+  assert.deepEqual(takeSmallestDeferredEntry(deferredPages, 'pageIndex'), {
+    pageIndex: 3,
+    retryCount: 1,
+  });
+  assert.equal(deferredPages.has(3), false);
+
+  assert.deepEqual(
+    selectKickAction({
+      deferredVerification: { problemId: 12, retryCount: 1 },
+      deferredBatch: { batchStart: 200, retryCount: 0 },
+      deferredPage: { pageIndex: 8, retryCount: 0 },
+      queueInitialized: true,
+      nextSequentialPage: 9,
+    }),
+    {
+      kind: 'verify',
+      problemId: 12,
+      retryCount: 1,
+    }
+  );
+
+  assert.deepEqual(
+    selectKickAction({
+      deferredVerification: null,
+      deferredBatch: null,
+      deferredPage: null,
+      queueInitialized: false,
+      nextSequentialPage: 21,
+    }),
+    {
+      kind: 'sequential',
+      pageIndex: 21,
+    }
+  );
+});
+
+test('runtime complexity helpers: runtime idle verification gates and snapshot pruning stay deterministic', () => {
+  assert.equal(
+    isRuntimeQueueDrained({
+      queueInitialized: true,
+      pageQueueLength: 0,
+      deferredScoreBatchCount: 0,
+      deferredVerificationCount: 0,
+      inFlight: 0,
+    }),
+    true
+  );
+  assert.equal(
+    isRuntimeQueueDrained({
+      queueInitialized: true,
+      pageQueueLength: 1,
+      deferredScoreBatchCount: 0,
+      deferredVerificationCount: 0,
+      inFlight: 0,
+    }),
+    false
+  );
+
+  assert.equal(
+    shouldStartVerificationPass({
+      verificationState: { running: false, enabled: true, completed: false },
+      hasUnsolvedProblems: true,
+    }),
+    true
+  );
+  assert.equal(
+    shouldStartVerificationPass({
+      verificationState: { running: true, enabled: true, completed: false },
+      hasUnsolvedProblems: true,
+    }),
+    false
+  );
+
+  const pruneResult = pruneSnapshotEntries(
+    [
+      { id: 'a', storageVersion: 2 },
+      { id: 'b', storageVersion: 2 },
+      { id: 'c', storageVersion: 2 },
+    ],
+    {
+      maxEntries: 2,
+      snapshotItemKey(id) {
+        return `key-${id}`;
+      },
+      storageHasValue(key) {
+        return key !== 'key-b';
+      },
+    }
+  );
+
+  assert.deepEqual(
+    pruneResult.pruned.map((entry) => entry.id),
+    ['a', 'c']
+  );
+  assert.deepEqual(pruneResult.staleKeys, ['key-b']);
 });

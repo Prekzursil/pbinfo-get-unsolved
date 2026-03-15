@@ -157,6 +157,163 @@ function getSnapshotLevelLabel(storageLevel) {
   return 'compact';
 }
 
+function formatClipboardCopySuccessMessage(copiedCount, itemLabel, method) {
+  const legacySuffix = method === 'execCommand' ? ' (fallback legacy copy)' : '';
+  return `Am copiat ${copiedCount} ${itemLabel} în clipboard${legacySuffix}.`;
+}
+
+function formatClipboardCopyErrorMessage(itemLabel, errorDescription) {
+  return `<span style="color:#b30000;">Nu am putut copia ${itemLabel} în clipboard. ${errorDescription}</span>`;
+}
+
+async function copyVisibleProblemsToClipboard({
+  getVisibleProblems,
+  toText,
+  copyTextToClipboard,
+  addLog,
+  describeClipboardError,
+  successItemLabel,
+  failureItemLabel,
+}) {
+  const visible = getVisibleProblems();
+  const text = toText(visible);
+  if (!text) {
+    addLog('Nimic de copiat.');
+    return;
+  }
+
+  try {
+    const result = await copyTextToClipboard(text);
+    addLog(formatClipboardCopySuccessMessage(visible.length, successItemLabel, result?.method));
+  } catch (error) {
+    addLog(formatClipboardCopyErrorMessage(failureItemLabel, describeClipboardError(error)));
+    console.error(error);
+  }
+}
+
+function appendClipboardCopyButton({
+  group,
+  buttonLabel,
+  onCopy,
+}) {
+  const button = document.createElement('button');
+  button.textContent = buttonLabel;
+  button.addEventListener('click', onCopy);
+  group.appendChild(button);
+}
+
+function takeSmallestDeferredEntry(map, keyName) {
+  if (!(map instanceof Map) || map.size === 0) return null;
+
+  let bestKey = null;
+  let bestRetry = 0;
+  for (const [candidateKey, retryCount] of map.entries()) {
+    if (bestKey == null || candidateKey < bestKey) {
+      bestKey = candidateKey;
+      bestRetry = retryCount;
+    }
+  }
+
+  if (bestKey == null) return null;
+  map.delete(bestKey);
+  return {
+    [keyName]: bestKey,
+    retryCount: bestRetry,
+  };
+}
+
+function selectKickAction({
+  deferredVerification,
+  deferredBatch,
+  deferredPage,
+  queueInitialized,
+  nextSequentialPage,
+}) {
+  let action = { kind: 'idle' };
+
+  if (deferredVerification) {
+    action = {
+      kind: 'verify',
+      problemId: deferredVerification.problemId,
+      retryCount: deferredVerification.retryCount,
+    };
+  } else if (deferredBatch) {
+    action = {
+      kind: 'score-batch',
+      batchStart: deferredBatch.batchStart,
+      retryCount: deferredBatch.retryCount,
+    };
+  } else if (deferredPage) {
+    action = {
+      kind: 'page',
+      pageIndex: deferredPage.pageIndex,
+      retryCount: deferredPage.retryCount,
+    };
+  } else if (queueInitialized) {
+    action = { kind: 'queue' };
+  } else if (nextSequentialPage != null) {
+    action = {
+      kind: 'sequential',
+      pageIndex: nextSequentialPage,
+    };
+  }
+
+  return action;
+}
+
+function isRuntimeQueueDrained({
+  queueInitialized,
+  pageQueueLength,
+  deferredScoreBatchCount,
+  deferredVerificationCount,
+  inFlight,
+}) {
+  const checks = [
+    queueInitialized === true,
+    pageQueueLength === 0,
+    deferredScoreBatchCount === 0,
+    deferredVerificationCount === 0,
+    inFlight === 0,
+  ];
+
+  return checks.every(Boolean);
+}
+
+function shouldStartVerificationPass({
+  verificationState,
+  hasUnsolvedProblems,
+}) {
+  return (
+    !verificationState.running &&
+    verificationState.enabled &&
+    !verificationState.completed &&
+    hasUnsolvedProblems
+  );
+}
+
+function pruneSnapshotEntries(index, { maxEntries, snapshotItemKey, storageHasValue }) {
+  const pruned = [];
+  const staleKeys = [];
+  const keepIds = new Set();
+
+  for (const entry of index) {
+    const key = snapshotItemKey(entry.id, entry.storageVersion);
+    if (!key || !storageHasValue(key)) continue;
+    pruned.push(entry);
+    keepIds.add(entry.id);
+    if (pruned.length >= maxEntries) break;
+  }
+
+  for (const entry of index) {
+    if (keepIds.has(entry.id)) continue;
+    const key = snapshotItemKey(entry.id, entry.storageVersion);
+    if (!key) continue;
+    staleKeys.push(key);
+  }
+
+  return { pruned, staleKeys };
+}
+
 async function resolveScanModeSelection({
   overlayEnabled,
   modePromptDisabled,
@@ -250,53 +407,51 @@ function resolveWizardVerifyUnsolvedSelection(setupSelection) {
   return setupSelection.verifyUnsolved === true;
 }
 
-function resolvePageLinkSelection({ setupSelection, scanMode, config, defaultLink, locationRef }) {
-  if (setupSelection && scanMode === 'id-range') {
+function resolvePageLinkFromSetupSelection(setupSelection, scanMode, config) {
+  if (scanMode === 'id-range') {
     config.idRange.startId = setupSelection.idRange.startId;
     config.idRange.endId = setupSelection.idRange.endId;
-    config.startPage = setupSelection.startPage;
-    return {
-      aborted: false,
-      pageLink: setupSelection.pageLink,
-    };
   }
-  if (setupSelection && scanMode === 'list') {
-    config.startPage = setupSelection.startPage;
+  config.startPage = setupSelection.startPage;
+  return {
+    aborted: false,
+    pageLink: setupSelection.pageLink,
+  };
+}
+
+function resolveIdRangePromptPageLink(config, locationRef) {
+  const defaultRange = `${config.idRange.startId}-${config.idRange.endId}`;
+  const idRangeInput = prompt(
+    'Interval ID de scanat (ex: 1-8000).\n' +
+      'Notă: scanarea pe ID-uri este mai lentă și poate necesita delay/concurență mică.',
+    defaultRange
+  );
+  if (idRangeInput === null) {
     return {
-      aborted: false,
-      pageLink: setupSelection.pageLink,
-    };
-  }
-  if (scanMode === 'id-range') {
-    const defaultRange = `${config.idRange.startId}-${config.idRange.endId}`;
-    const idRangeInput = prompt(
-      'Interval ID de scanat (ex: 1-8000).\n' +
-        'Notă: scanarea pe ID-uri este mai lentă și poate necesita delay/concurență mică.',
-      defaultRange
-    );
-    if (idRangeInput === null) {
-      return {
-        aborted: true,
-        warning: 'Nu a fost furnizat intervalul ID. Scriptul a fost oprit.',
-      };
-    }
-    const range = parseNormalizedIdRangeInput(idRangeInput, defaultRange);
-    if (!range) {
-      return {
-        aborted: true,
-        warning: 'Interval ID invalid. Scriptul a fost oprit.',
-      };
-    }
-    const { startId, endId } = range;
-    config.idRange.startId = startId;
-    config.idRange.endId = endId;
-    config.startPage = startId;
-    return {
-      aborted: false,
-      pageLink: buildIdRangePageLink(locationRef, range),
+      aborted: true,
+      warning: 'Nu a fost furnizat intervalul ID. Scriptul a fost oprit.',
     };
   }
 
+  const range = parseNormalizedIdRangeInput(idRangeInput, defaultRange);
+  if (!range) {
+    return {
+      aborted: true,
+      warning: 'Interval ID invalid. Scriptul a fost oprit.',
+    };
+  }
+
+  const { startId, endId } = range;
+  config.idRange.startId = startId;
+  config.idRange.endId = endId;
+  config.startPage = startId;
+  return {
+    aborted: false,
+    pageLink: buildIdRangePageLink(locationRef, range),
+  };
+}
+
+function resolveListPromptPageLink(defaultLink, config) {
   let pageLinkInput = prompt(
     'Pune un link către lista de probleme de unde vrei să obții problemele nerezolvate.\n' +
       'Enter = pagina curentă. Dacă folosești filtre, copiază link-ul din bara de adrese.',
@@ -325,6 +480,17 @@ function resolvePageLinkSelection({ setupSelection, scanMode, config, defaultLin
     pageLink: normalizedPageLink,
   };
 }
+
+function resolvePageLinkSelection({ setupSelection, scanMode, config, defaultLink, locationRef }) {
+  if (setupSelection) {
+    return resolvePageLinkFromSetupSelection(setupSelection, scanMode, config);
+  }
+  if (scanMode === 'id-range') {
+    return resolveIdRangePromptPageLink(config, locationRef);
+  }
+  return resolveListPromptPageLink(defaultLink, config);
+}
+
 
 function setSelectOptions(select, options) {
   select.replaceChildren();
@@ -790,6 +956,15 @@ if (globalThis.document === undefined) {
       restoreProblemsFromSnapshot,
       isLikelyPbinfoNotFoundHtml,
       isLikelyPbinfoBlockedHtml,
+      formatClipboardCopySuccessMessage,
+      formatClipboardCopyErrorMessage,
+      copyVisibleProblemsToClipboard,
+      takeSmallestDeferredEntry,
+      selectKickAction,
+      isRuntimeQueueDrained,
+      shouldStartVerificationPass,
+      pruneSnapshotEntries,
+      resolvePageLinkSelection,
     };
   }
 } else {
@@ -2302,82 +2477,50 @@ if (globalThis.document === undefined) {
       });
       groupExport.appendChild(exportJson);
 
-      const copyLinks = document.createElement('button');
-      copyLinks.textContent = 'Copiază link-uri';
-      copyLinks.addEventListener('click', async () => {
-        const visible = getVisibleProblems();
-        const text = problemsToLinksText(visible);
-        if (!text) {
-          addLog('Nimic de copiat.');
-          return;
-        }
-        try {
-          const res = await copyTextToClipboard(text);
-          if (res?.method === 'execCommand') {
-            addLog(`Am copiat ${visible.length} link-uri în clipboard (fallback legacy copy).`);
-          } else {
-            addLog(`Am copiat ${visible.length} link-uri în clipboard.`);
-          }
-        } catch (err) {
-          addLog(
-            `<span style="color:#b30000;">Nu am putut copia link-urile în clipboard. ${describeClipboardError(err)}</span>`
-          );
-          console.error(err);
-        }
+      appendClipboardCopyButton({
+        group: groupExport,
+        buttonLabel: 'Copiază link-uri',
+        onCopy: () =>
+          copyVisibleProblemsToClipboard({
+            getVisibleProblems,
+            toText: problemsToLinksText,
+            copyTextToClipboard,
+            addLog,
+            describeClipboardError,
+            successItemLabel: 'link-uri',
+            failureItemLabel: 'link-urile',
+          }),
       });
-      groupExport.appendChild(copyLinks);
 
-      const copyIds = document.createElement('button');
-      copyIds.textContent = 'Copiază ID-uri';
-      copyIds.addEventListener('click', async () => {
-        const visible = getVisibleProblems();
-        const text = problemsToIdsText(visible);
-        if (!text) {
-          addLog('Nimic de copiat.');
-          return;
-        }
-        try {
-          const res = await copyTextToClipboard(text);
-          if (res?.method === 'execCommand') {
-            addLog(`Am copiat ${visible.length} ID-uri în clipboard (fallback legacy copy).`);
-          } else {
-            addLog(`Am copiat ${visible.length} ID-uri în clipboard.`);
-          }
-        } catch (err) {
-          addLog(
-            `<span style="color:#b30000;">Nu am putut copia ID-urile în clipboard. ${describeClipboardError(err)}</span>`
-          );
-          console.error(err);
-        }
+      appendClipboardCopyButton({
+        group: groupExport,
+        buttonLabel: 'Copiază ID-uri',
+        onCopy: () =>
+          copyVisibleProblemsToClipboard({
+            getVisibleProblems,
+            toText: problemsToIdsText,
+            copyTextToClipboard,
+            addLog,
+            describeClipboardError,
+            successItemLabel: 'ID-uri',
+            failureItemLabel: 'ID-urile',
+          }),
       });
-      groupExport.appendChild(copyIds);
 
-      const copyMarkdown = document.createElement('button');
-      copyMarkdown.textContent = 'Copiază Markdown';
-      copyMarkdown.addEventListener('click', async () => {
-        const visible = getVisibleProblems();
-        const text = problemsToMarkdownText(visible);
-        if (!text) {
-          addLog('Nimic de copiat.');
-          return;
-        }
-        try {
-          const res = await copyTextToClipboard(text);
-          if (res?.method === 'execCommand') {
-            addLog(
-              `Am copiat ${visible.length} rânduri Markdown în clipboard (fallback legacy copy).`
-            );
-          } else {
-            addLog(`Am copiat ${visible.length} rânduri Markdown în clipboard.`);
-          }
-        } catch (err) {
-          addLog(
-            `<span style="color:#b30000;">Nu am putut copia Markdown în clipboard. ${describeClipboardError(err)}</span>`
-          );
-          console.error(err);
-        }
+      appendClipboardCopyButton({
+        group: groupExport,
+        buttonLabel: 'Copiază Markdown',
+        onCopy: () =>
+          copyVisibleProblemsToClipboard({
+            getVisibleProblems,
+            toText: problemsToMarkdownText,
+            copyTextToClipboard,
+            addLog,
+            describeClipboardError,
+            successItemLabel: 'rânduri Markdown',
+            failureItemLabel: 'Markdown',
+          }),
       });
-      groupExport.appendChild(copyMarkdown);
 
       const groupSession = document.createElement('div');
       groupSession.className = 'group';
@@ -3233,20 +3376,13 @@ if (globalThis.document === undefined) {
     function pruneSnapshotIndex(index) {
       const max = Number.isFinite(snapshotConfig.maxEntries) ? snapshotConfig.maxEntries : 8;
       const list = normalizeSnapshotIndex(index);
-      const pruned = [];
-      for (const entry of list) {
-        const key = snapshotItemKey(entry.id, entry.storageVersion);
-        if (!key) continue;
-        if (!storageHasValue(key)) continue;
-        pruned.push(entry);
-        if (pruned.length >= max) break;
-      }
-      const keep = new Set(pruned.map((x) => x.id));
-      for (const entry of list) {
-        if (keep.has(entry.id)) continue;
-        const key = snapshotItemKey(entry.id, entry.storageVersion);
-        if (!key) continue;
-        storageRemove(key);
+      const { pruned, staleKeys } = pruneSnapshotEntries(list, {
+        maxEntries: max,
+        snapshotItemKey,
+        storageHasValue,
+      });
+      if (staleKeys.length > 0) {
+        storageRemove(staleKeys);
       }
       return pruned;
     }
@@ -3690,64 +3826,63 @@ if (globalThis.document === undefined) {
         });
       };
       const handleScoreBatchClassification = ({ classification, res }) => {
-        if (classification === 'rate-limited') {
-          const delay =
-            parseRetryAfterMs(res.headers.get('Retry-After')) ?? getRetryDelayMs(retryCount);
-          recordScoreBatchOutcome('rate-limited', retryCount + 1);
-          finalize();
-          if (retryCount < maxRetriesPerPage) {
-            deferScoreBatch(batchStart, retryCount + 1);
-            enterSystemPause('rate-limit', {
-              delayMs: delay,
-              message: `HTTP 429 pentru scorurile batch ${batchStart}-${batchEnd}. Reiau automat în ${getRetryDelayLabel(delay)}.`,
-            });
-            return true;
-          }
-          idRangeScoreBatchFailed.add(batchStart);
-          schedule(kick);
-          return true;
-        }
-
-        if (classification === 'blocked') {
-          noteAdaptiveFailure('blocked');
-          recordScoreBatchOutcome('blocked', retryCount + 1);
-          if (!idRangeWarnedAboutScoreBatch) {
-            idRangeWarnedAboutScoreBatch = true;
-            addLog(
-              '<span style="color:#b35c00;"><b>Atenție:</b> am detectat o pagină de verificare (posibil Cloudflare) la request-ul de scoruri (batch). Rezolvă challenge-ul, apoi apasă Resume now.</span>'
-            );
-          }
-          finalize();
-          if (retryCount < maxRetriesPerPage) {
-            deferScoreBatch(batchStart, retryCount + 1);
-            enterSystemPause('challenge', {
-              message: `Challenge detectat pentru scorurile batch ${batchStart}-${batchEnd}.`,
-            });
-            return true;
-          }
-          idRangeScoreBatchFailed.add(batchStart);
-          schedule(kick);
-          return true;
-        }
-
-        if (classification === 'http-error') {
-          noteAdaptiveFailure('http');
-          recordScoreBatchOutcome('http-error', retryCount + 1);
-          if (retryCount < maxRetriesPerPage) {
+        const handlers = {
+          'rate-limited': () => {
+            const delay =
+              parseRetryAfterMs(res.headers.get('Retry-After')) ?? getRetryDelayMs(retryCount);
+            recordScoreBatchOutcome('rate-limited', retryCount + 1);
             finalize();
-            deferScoreBatchRetry(retryCount + 1);
-            return true;
-          }
-          finalize();
-          idRangeScoreBatchFailed.add(batchStart);
-          addLog(
-            `<span style="color:#b35c00;"><b>Score batch:</b> eșuat pentru ${batchStart}-${batchEnd} (status ${res.status}); continui fără scoruri batch.</span>`
-          );
-          schedule(kick);
-          return true;
-        }
+            if (retryCount < maxRetriesPerPage) {
+              deferScoreBatch(batchStart, retryCount + 1);
+              enterSystemPause('rate-limit', {
+                delayMs: delay,
+                message: `HTTP 429 pentru scorurile batch ${batchStart}-${batchEnd}. Reiau automat în ${getRetryDelayLabel(delay)}.`,
+              });
+            } else {
+              idRangeScoreBatchFailed.add(batchStart);
+              schedule(kick);
+            }
+          },
+          blocked: () => {
+            noteAdaptiveFailure('blocked');
+            recordScoreBatchOutcome('blocked', retryCount + 1);
+            if (!idRangeWarnedAboutScoreBatch) {
+              idRangeWarnedAboutScoreBatch = true;
+              addLog(
+                '<span style="color:#b35c00;"><b>Atenție:</b> am detectat o pagină de verificare (posibil Cloudflare) la request-ul de scoruri (batch). Rezolvă challenge-ul, apoi apasă Resume now.</span>'
+              );
+            }
+            finalize();
+            if (retryCount < maxRetriesPerPage) {
+              deferScoreBatch(batchStart, retryCount + 1);
+              enterSystemPause('challenge', {
+                message: `Challenge detectat pentru scorurile batch ${batchStart}-${batchEnd}.`,
+              });
+            } else {
+              idRangeScoreBatchFailed.add(batchStart);
+              schedule(kick);
+            }
+          },
+          'http-error': () => {
+            noteAdaptiveFailure('http');
+            recordScoreBatchOutcome('http-error', retryCount + 1);
+            finalize();
+            if (retryCount < maxRetriesPerPage) {
+              deferScoreBatchRetry(retryCount + 1);
+            } else {
+              idRangeScoreBatchFailed.add(batchStart);
+              addLog(
+                `<span style="color:#b35c00;"><b>Score batch:</b> eșuat pentru ${batchStart}-${batchEnd} (status ${res.status}); continui fără scoruri batch.</span>`
+              );
+              schedule(kick);
+            }
+          },
+        };
 
-        return false;
+        const applyClassification = handlers[classification];
+        if (!applyClassification) return false;
+        applyClassification();
+        return true;
       };
       const handleScoreBatchResponse = async (res) => {
         const responseText = await res.text();
@@ -3882,108 +4017,80 @@ if (globalThis.document === undefined) {
     }
 
     function takeDeferred() {
-      if (deferredPageRequests.size === 0) return null;
-      let bestPage = null;
-      let bestRetry = 0;
-      for (const [pageIndex, retryCount] of deferredPageRequests.entries()) {
-        if (bestPage == null || pageIndex < bestPage) {
-          bestPage = pageIndex;
-          bestRetry = retryCount;
-        }
-      }
-      if (bestPage == null) return null;
-      deferredPageRequests.delete(bestPage);
-      return { pageIndex: bestPage, retryCount: bestRetry };
+      return takeSmallestDeferredEntry(deferredPageRequests, 'pageIndex');
     }
 
     function takeDeferredScoreBatch() {
-      if (deferredScoreBatchRequests.size === 0) return null;
-      let bestStart = null;
-      let bestRetry = 0;
-      for (const [batchStart, retryCount] of deferredScoreBatchRequests.entries()) {
-        if (bestStart == null || batchStart < bestStart) {
-          bestStart = batchStart;
-          bestRetry = retryCount;
-        }
-      }
-      if (bestStart == null) return null;
-      deferredScoreBatchRequests.delete(bestStart);
-      return { batchStart: bestStart, retryCount: bestRetry };
+      return takeSmallestDeferredEntry(deferredScoreBatchRequests, 'batchStart');
     }
 
     function takeDeferredVerification() {
-      if (deferredVerificationRequests.size === 0) return null;
-      let bestProblem = null;
-      let bestRetry = 0;
-      for (const [problemId, retryCount] of deferredVerificationRequests.entries()) {
-        if (bestProblem == null || problemId < bestProblem) {
-          bestProblem = problemId;
-          bestRetry = retryCount;
-        }
-      }
-      if (bestProblem == null) return null;
-      deferredVerificationRequests.delete(bestProblem);
-      return { problemId: bestProblem, retryCount: bestRetry };
+      return takeSmallestDeferredEntry(deferredVerificationRequests, 'problemId');
     }
 
     function kick() {
-      if (finished || paused) return;
-      if (inFlight >= getEffectiveConcurrency()) return;
+      if (finished || paused || inFlight >= getEffectiveConcurrency()) return;
 
-      const deferredVerification = takeDeferredVerification();
-      if (deferredVerification) {
-        fetchVerificationProblem(deferredVerification.problemId, deferredVerification.retryCount);
+      const action = selectKickAction({
+        deferredVerification: takeDeferredVerification(),
+        deferredBatch: takeDeferredScoreBatch(),
+        deferredPage: takeDeferred(),
+        queueInitialized,
+        nextSequentialPage,
+      });
+
+      if (action.kind === 'verify') {
+        fetchVerificationProblem(action.problemId, action.retryCount);
         return;
       }
-
-      const deferredBatch = takeDeferredScoreBatch();
-      if (deferredBatch) {
-        fetchIdRangeScoreBatch(deferredBatch.batchStart, deferredBatch.retryCount);
+      if (action.kind === 'score-batch') {
+        fetchIdRangeScoreBatch(action.batchStart, action.retryCount);
         return;
       }
-
-      const deferred = takeDeferred();
-      if (deferred) {
-        fetchPage(deferred.pageIndex, deferred.retryCount);
+      if (action.kind === 'page') {
+        fetchPage(action.pageIndex, action.retryCount);
         return;
       }
-
-      if (queueInitialized) {
+      if (action.kind === 'queue') {
         fetchNext();
         return;
       }
-
-      if (nextSequentialPage != null) {
-        const p = nextSequentialPage;
+      if (action.kind === 'sequential') {
         nextSequentialPage = null;
-        fetchPage(p, 0);
+        fetchPage(action.pageIndex, 0);
       }
     }
 
     function maybeFinish() {
       if (finished) return;
       if (
-        queueInitialized &&
-        pageQueue.length === 0 &&
-        deferredScoreBatchRequests.size === 0 &&
-        deferredVerificationRequests.size === 0 &&
-        inFlight === 0
+        !isRuntimeQueueDrained({
+          queueInitialized,
+          pageQueueLength: pageQueue.length,
+          deferredScoreBatchCount: deferredScoreBatchRequests.size,
+          deferredVerificationCount: deferredVerificationRequests.size,
+          inFlight,
+        })
       ) {
-        if (
-          !verificationState.running &&
-          verificationState.enabled &&
-          !verificationState.completed &&
-          allProblems.some((p) => p.status !== 'solved')
-        ) {
-          startVerificationPass();
-          return;
-        }
-        if (verificationState.running) {
-          verificationState.running = false;
-          verificationState.completed = true;
-        }
-        finishScan({ complete: true });
+        return;
       }
+
+      const hasUnsolvedProblems = allProblems.some((problem) => problem.status !== 'solved');
+      if (
+        shouldStartVerificationPass({
+          verificationState,
+          hasUnsolvedProblems,
+        })
+      ) {
+        startVerificationPass();
+        return;
+      }
+
+      if (verificationState.running) {
+        verificationState.running = false;
+        verificationState.completed = true;
+      }
+      finishScan({ complete: true });
     }
 
     function bumpStatusCounter(status, delta) {
@@ -4348,18 +4455,29 @@ if (globalThis.document === undefined) {
     }
 
     function preparePageFetchStart(pageIndex, retryCount) {
-      if (finished || stopRequested) return null;
-      if (paused) {
+      let blocked = finished || stopRequested;
+      let knownIdRangeScore = null;
+
+      if (!blocked && paused) {
         deferPage(pageIndex, retryCount);
-        return null;
+        blocked = true;
       }
-      if (enforcePageFetchMaxPagesLimit(pageIndex)) return null;
 
-      const prefetchResolution = resolvePrefetchedIdRangeScoreForPage(pageIndex, retryCount);
-      if (prefetchResolution.handled) return null;
-      if (shouldDeferPageForConcurrency(pageIndex, retryCount)) return null;
+      if (!blocked && enforcePageFetchMaxPagesLimit(pageIndex)) {
+        blocked = true;
+      }
 
-      return { knownIdRangeScore: prefetchResolution.knownIdRangeScore };
+      if (!blocked) {
+        const prefetchResolution = resolvePrefetchedIdRangeScoreForPage(pageIndex, retryCount);
+        knownIdRangeScore = prefetchResolution.knownIdRangeScore;
+        if (prefetchResolution.handled) {
+          blocked = true;
+        } else if (shouldDeferPageForConcurrency(pageIndex, retryCount)) {
+          blocked = true;
+        }
+      }
+
+      return blocked ? null : { knownIdRangeScore };
     }
 
     function fetchPage(pageIndex, retryCount = 0) {
