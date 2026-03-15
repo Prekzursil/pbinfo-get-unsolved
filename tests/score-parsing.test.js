@@ -1,7 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { parseScoreText, selectScoreFromCandidates, stripProblemIdPrefix } = require('../src/core');
+const {
+  parseScoreText,
+  selectScoreFromCandidates,
+  stripProblemIdPrefix,
+  classifyProblemStatus,
+} = require('../src/core');
 
 test('parseScoreText: ratio', () => {
   assert.deepEqual(parseScoreText(' 65/100 '), { value: 65, max: 100, hasRatio: true });
@@ -79,4 +84,10 @@ test('stripProblemIdPrefix: returns title unchanged when no id is provided', () 
 
 test('stripProblemIdPrefix: does not strip when the id is followed by an identifier character', () => {
   assert.equal(stripProblemIdPrefix('#123abc Problema mea', 123), '#123abc Problema mea');
+});
+
+test('classifyProblemStatus: keeps unattempted/solved/tried classification stable', () => {
+  assert.equal(classifyProblemStatus({ userScore: null, maxScore: 200 }), 'unattempted');
+  assert.equal(classifyProblemStatus({ userScore: 100, maxScore: null }), 'solved');
+  assert.equal(classifyProblemStatus({ userScore: 99, maxScore: 100 }), 'tried');
 });

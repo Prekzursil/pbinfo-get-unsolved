@@ -1,6 +1,24 @@
 const { normalizeSpace, normalizeForMatch } = require('./text-utils');
 const RANDOM_UINT32_DENOMINATOR = 2 ** 32;
 const EMPTY_STATE = Object.freeze({});
+const PBINFO_NOT_FOUND_MARKERS = ['pagina nu exista', 'pagina nu există', ' 404 '];
+const PBINFO_BLOCKED_PATTERNS = [
+  /cdn-cgi\/challenge-platform/i,
+  /cf-chl/i,
+  /attention required/i,
+  /security check/i,
+];
+const POSITIVE_NAMESPACE_SELECTORS = [
+  'header',
+  'nav',
+  '.navbar',
+  '#header',
+  '.topbar',
+  '.user-menu',
+  '.account',
+];
+const NEGATIVE_NAMESPACE_SELECTORS = ['main', 'article', '.card', 'table', '.problem-list'];
+const USER_NAMESPACE_PATTERN = /\/utilizator\/(\d+)\/([^/?#]+)/i;
 
 function queryAll(root, selector) {
   return Array.from(root?.querySelectorAll?.(selector) || []);
@@ -10,23 +28,38 @@ function hasClosestMatch(element, selector) {
   return !!element?.closest?.(selector);
 }
 
+function scoreNamespaceAnchor(anchor) {
+  let score = 0;
+
+  POSITIVE_NAMESPACE_SELECTORS.forEach(function (selector) {
+    if (hasClosestMatch(anchor, selector)) {
+      score += 5;
+    }
+  });
+
+  NEGATIVE_NAMESPACE_SELECTORS.forEach(function (selector) {
+    if (hasClosestMatch(anchor, selector)) {
+      score -= 4;
+    }
+  });
+
+  return score;
+}
+
 function isLikelyPbinfoNotFoundHtml(html) {
   const text = normalizeForMatch(String(html || ''));
 
-  return (
-    text.includes('pagina nu exista') || text.includes('pagina nu există') || text.includes(' 404 ')
-  );
+  return PBINFO_NOT_FOUND_MARKERS.some(function (marker) {
+    return text.includes(marker);
+  });
 }
 
 function isLikelyPbinfoBlockedHtml(html) {
   const text = String(html || '');
 
-  return (
-    /cdn-cgi\/challenge-platform/i.test(text) ||
-    /cf-chl/i.test(text) ||
-    /attention required/i.test(text) ||
-    /security check/i.test(text)
-  );
+  return PBINFO_BLOCKED_PATTERNS.some(function (pattern) {
+    return pattern.test(text);
+  });
 }
 
 function parseTotalProblems(html) {
@@ -284,43 +317,21 @@ function parseRetryAfterMs(value, nowMs) {
 
 function detectPbinfoUserNamespace(root) {
   const anchors = queryAll(root, 'a[href*="/utilizator/"]');
-  const positiveContainers = [
-    'header',
-    'nav',
-    '.navbar',
-    '#header',
-    '.topbar',
-    '.user-menu',
-    '.account',
-  ];
-  const negativeContainers = ['main', 'article', '.card', 'table', '.problem-list'];
   let best = null;
   let bestScore = -Infinity;
 
   anchors.forEach(function (anchor) {
     const href = normalizeSpace(anchor?.href || '');
-    const match = /\/utilizator\/(\d+)\/([^/?#]+)/i.exec(href);
-    let score = 0;
-
+    const match = USER_NAMESPACE_PATTERN.exec(href);
     if (!match) {
       return;
     }
 
-    positiveContainers.forEach(function (selector) {
-      if (hasClosestMatch(anchor, selector)) {
-        score += 5;
-      }
-    });
-
-    negativeContainers.forEach(function (selector) {
-      if (hasClosestMatch(anchor, selector)) {
-        score -= 4;
-      }
-    });
+    const score = scoreNamespaceAnchor(anchor);
 
     if (score > bestScore) {
       bestScore = score;
-      best = match[1] + ':' + match[2];
+      best = `${match[1]}:${match[2]}`;
     }
   });
 

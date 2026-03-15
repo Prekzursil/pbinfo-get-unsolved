@@ -220,6 +220,10 @@ function normalizeStorageKeys(keys) {
   return Array.isArray(keys) ? keys : [keys];
 }
 
+function createStorageSetResult(ok, errorType) {
+  return { ok: ok, errorType: errorType };
+}
+
 async function hydrateStorageEntry({
   key,
   storeName,
@@ -284,14 +288,11 @@ function storageGetJsonForKeys({ keys, storageCache, localStorageApi }) {
 }
 
 function storageSetJsonForKey({ key, value, state, storageCache, localStorageApi, idbWrite }) {
-  if (!key) {
-    const failureResult = {};
-    failureResult.ok = false;
-    failureResult.errorType = 'unknown';
-    return failureResult;
-  }
+  let result;
 
-  if (state.enabled) {
+  if (!key) {
+    result = createStorageSetResult(false, 'unknown');
+  } else if (state.enabled) {
     storageCache.set(key, value);
     const storeName = getIndexedDbStoreForKey(key);
 
@@ -300,13 +301,12 @@ function storageSetJsonForKey({ key, value, state, storageCache, localStorageApi
     }
 
     removeLocalStorageKey(localStorageApi, key);
-    const successResult = {};
-    successResult.ok = true;
-    successResult.errorType = null;
-    return successResult;
+    result = createStorageSetResult(true, null);
+  } else {
+    result = writeLocalStorageJson(localStorageApi, key, value);
   }
 
-  return writeLocalStorageJson(localStorageApi, key, value);
+  return result;
 }
 
 function storageRemoveKeys({ keys, state, storageCache, localStorageApi, idbDelete }) {
@@ -328,6 +328,13 @@ function storageRemoveKeys({ keys, state, storageCache, localStorageApi, idbDele
   }
 }
 
+function resolveHydrationStoreName(key) {
+  if (!key) {
+    return null;
+  }
+  return getIndexedDbStoreForKey(key);
+}
+
 function createIndexedDbOperations({
   backendPreference,
   indexedDbApi,
@@ -337,30 +344,17 @@ function createIndexedDbOperations({
   storageCache,
   localStorageApi,
 }) {
-  function openIndexedDb() {
-    return openIndexedDbBackend({
+  const openIndexedDb = () =>
+    openIndexedDbBackend({
       indexedDbApi,
       backendPreference,
       databaseName,
       databaseVersion,
     });
-  }
-
-  function idbRead(storeName, key) {
-    return runIndexedDbRead(state, storeName, key);
-  }
-
-  function idbWrite(storeName, key, value) {
-    return runIndexedDbWrite(state, storeName, key, value);
-  }
-
-  function idbDelete(storeName, key) {
-    return runIndexedDbDelete(state, storeName, key);
-  }
-
-  function idbClearStore(storeName) {
-    return runIndexedDbClearStore(state, storeName);
-  }
+  const idbRead = (storeName, key) => runIndexedDbRead(state, storeName, key);
+  const idbWrite = (storeName, key, value) => runIndexedDbWrite(state, storeName, key, value);
+  const idbDelete = (storeName, key) => runIndexedDbDelete(state, storeName, key);
+  const idbClearStore = (storeName) => runIndexedDbClearStore(state, storeName);
 
   async function initIndexedDbState(keysToHydrate = []) {
     if (backendPreference === 'localstorage') {
@@ -381,11 +375,7 @@ function createIndexedDbOperations({
     }
 
     for (const key of normalizeStorageKeys(keysToHydrate)) {
-      if (!key) {
-        continue;
-      }
-
-      const storeName = getIndexedDbStoreForKey(key);
+      const storeName = resolveHydrationStoreName(key);
       if (!storeName) {
         continue;
       }

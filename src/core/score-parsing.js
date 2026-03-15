@@ -168,14 +168,28 @@ function buildUnknownUserScoreResult(maxScore) {
   return { userScore: null, maxScore: maxScore };
 }
 
+function isAmbiguousTopScoreCandidate(bestCandidate) {
+  if (bestCandidate.value !== 100) {
+    return false;
+  }
+
+  if (isUserCandidate(bestCandidate)) {
+    return false;
+  }
+
+  return !bestCandidate.hasRatio;
+}
+
 function shouldTreatCandidateAsImplicitMax(bestCandidate, candidates, maxScore) {
-  return (
-    !isUserCandidate(bestCandidate) &&
-    !bestCandidate.hasRatio &&
-    candidates.length === 1 &&
-    bestCandidate.value === 100 &&
-    maxScore === null
-  );
+  if (candidates.length !== 1) {
+    return false;
+  }
+
+  if (!isAmbiguousTopScoreCandidate(bestCandidate)) {
+    return false;
+  }
+
+  return maxScore === null;
 }
 
 function resolveSelectedCandidateMaxScore(bestCandidate, maxScore) {
@@ -268,15 +282,7 @@ function buildScoreCandidatesFromCard(card) {
     const text = normalizeSpace(element.textContent);
     const parsed = parseScoreText(text) || parseScoreText(rawTooltip);
 
-    if (!tooltip) {
-      return;
-    }
-
-    if (!includesScoreLabel(tooltip)) {
-      return;
-    }
-
-    if (!parsed) {
+    if (!isTooltipScoreCandidate({ tooltip, parsed })) {
       return;
     }
 
@@ -491,7 +497,7 @@ function stripProblemIdPrefix(titleText, problemId) {
 }
 
 function classifyProblemStatus(scoreInfo) {
-  const maxPoints = Number.isFinite(scoreInfo?.maxScore) ? scoreInfo.maxScore : 100;
+  const maxPoints = resolveScoreMaxPoints(scoreInfo);
 
   if (scoreInfo?.userScore == null) {
     return 'unattempted';
@@ -502,6 +508,17 @@ function classifyProblemStatus(scoreInfo) {
   }
 
   return 'tried';
+}
+
+function resolveScoreMaxPoints(scoreInfo) {
+  if (Number.isFinite(scoreInfo?.maxScore)) {
+    return scoreInfo.maxScore;
+  }
+  return 100;
+}
+
+function isTooltipScoreCandidate({ tooltip, parsed }) {
+  return Boolean(tooltip) && includesScoreLabel(tooltip) && parsed != null;
 }
 
 module.exports = {

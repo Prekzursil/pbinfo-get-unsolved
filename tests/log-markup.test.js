@@ -42,6 +42,7 @@ test('log markup helpers parse supported tags and sanitize URLs', () => {
   assert.equal(extractColorFromStyle('background:red'), '');
   assert.equal(extractColorFromStyle('broken-declaration'), '');
   assert.equal(skipWhitespace('  x', 0), 2);
+  assert.equal(skipWhitespace('\n\r\t\fvalue', 0), 4);
   assert.deepEqual(readAttributeName('href="/safe"', 0), {
     attributeName: 'href',
     nextIndex: 4,

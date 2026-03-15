@@ -66,21 +66,25 @@ function isSafeColor(value) {
   return isHexColor(value) || isAsciiLettersOnly(value);
 }
 
+const WHITESPACE_CHARACTERS = new Set([' ', '\n', '\r', '\t', '\f']);
+
 function isWhitespaceCharacter(value) {
-  return value === ' ' || value === '\n' || value === '\r' || value === '\t' || value === '\f';
+  return WHITESPACE_CHARACTERS.has(value);
 }
 
 function isAsciiTagName(value) {
   return isAsciiLettersOnly(value);
 }
 
+function isAsciiLetterCode(code) {
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+}
+
 function isAttributeNameCharacter(value) {
   const codePoint = value.codePointAt(0);
   const code = codePoint == null ? -1 : codePoint;
 
-  return (
-    (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || value === ':' || value === '-'
-  );
+  return isAsciiLetterCode(code) || value === ':' || value === '-';
 }
 
 function resolveHrefUrl(rawHref, baseUrl) {
@@ -112,7 +116,7 @@ function parseCloseTag(innerTag) {
   const closeName = innerTag.slice(1).trim();
   if (!isAsciiTagName(closeName)) return null;
 
-  return createParsedTag('close', closeName.toLowerCase(), {});
+  return { kind: 'close', tagName: closeName.toLowerCase(), attrs: {} };
 }
 
 function splitTagContent(innerTag) {
@@ -121,10 +125,10 @@ function splitTagContent(innerTag) {
     splitIndex += 1;
   }
 
-  return createSplitTagContentResult(
-    innerTag.slice(0, splitIndex),
-    splitIndex < innerTag.length ? innerTag.slice(splitIndex + 1) : ''
-  );
+  return {
+    tagNameText: innerTag.slice(0, splitIndex),
+    attrsText: splitIndex < innerTag.length ? innerTag.slice(splitIndex + 1) : '',
+  };
 }
 
 function applySafeColorToElement(element, safeTagName, attrs) {
@@ -185,7 +189,7 @@ function readAttributeName(source, index) {
 
   if (nameStart === nextIndex) return null;
   const normalizedName = source.slice(nameStart, nextIndex).toLowerCase();
-  return createAttributeNameResult(normalizedName, nextIndex);
+  return { attributeName: normalizedName, nextIndex: nextIndex };
 }
 
 function readQuotedAttributeValue(source, index) {
@@ -199,7 +203,7 @@ function readQuotedAttributeValue(source, index) {
   if (nextIndex >= source.length) return null;
 
   const quotedValue = source.slice(valueStart, nextIndex);
-  return createAttributeValueResult(quotedValue, nextIndex + 1);
+  return { value: quotedValue, nextIndex: nextIndex + 1 };
 }
 
 function readAttributeEntry(source, index) {
@@ -226,11 +230,11 @@ function readAttributeEntry(source, index) {
     return null;
   }
 
-  return createAttributeEntryResult(
-    nameResult.attributeName,
-    valueResult.value,
-    valueResult.nextIndex
-  );
+  return {
+    attributeName: nameResult.attributeName,
+    value: valueResult.value,
+    nextIndex: valueResult.nextIndex,
+  };
 }
 
 function parseTagAttributes(rawAttrs) {
@@ -268,7 +272,7 @@ function parseOpenTag(innerTag) {
   if (!isAsciiTagName(tagNameText)) {
     return null;
   }
-  return createParsedTag('open', tagNameText.toLowerCase(), parseTagAttributes(attrsText));
+  return { kind: 'open', tagName: tagNameText.toLowerCase(), attrs: parseTagAttributes(attrsText) };
 }
 
 function extractInnerTagText(tagText) {
@@ -285,7 +289,7 @@ function extractInnerTagText(tagText) {
 function parseSupportedTag(rawTag) {
   const tagText = String(rawTag || '').trim();
   if (isBreakTagText(tagText)) {
-    return createParsedTag('void', 'br', Object.create(Object.prototype));
+    return { kind: 'void', tagName: 'br', attrs: {} };
   }
   const innerTag = extractInnerTagText(tagText);
   if (!innerTag) {
@@ -295,43 +299,6 @@ function parseSupportedTag(rawTag) {
     return parseCloseTag(innerTag);
   }
   return parseOpenTag(innerTag);
-}
-
-function createParsedTag(kind, tagName, attrs) {
-  const tag = Object.create(Object.prototype);
-  tag.kind = kind;
-  tag.tagName = tagName;
-  tag.attrs = attrs;
-  return tag;
-}
-
-function createSplitTagContentResult(tagNameText, attrsText) {
-  const result = Object.create(Object.prototype);
-  result.tagNameText = tagNameText;
-  result.attrsText = attrsText;
-  return result;
-}
-
-function createAttributeNameResult(attributeName, nextIndex) {
-  const result = Object.create(Object.prototype);
-  result.attributeName = attributeName;
-  result.nextIndex = nextIndex;
-  return result;
-}
-
-function createAttributeValueResult(value, nextIndex) {
-  const result = Object.create(Object.prototype);
-  result.value = value;
-  result.nextIndex = nextIndex;
-  return result;
-}
-
-function createAttributeEntryResult(attributeName, value, nextIndex) {
-  const result = Object.create(Object.prototype);
-  result.attributeName = attributeName;
-  result.value = value;
-  result.nextIndex = nextIndex;
-  return result;
 }
 
 function resolveBaseUrl(doc, options) {
