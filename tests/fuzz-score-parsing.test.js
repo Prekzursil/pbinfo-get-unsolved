@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { parseScoreText, selectScoreFromCandidates } = require('../pbinfo-get-unsolved-enhanced.js');
+const { parseScoreText, selectScoreFromCandidates } = require('../src/core');
 
 function mulberry32(seed) {
   let a = seed >>> 0;

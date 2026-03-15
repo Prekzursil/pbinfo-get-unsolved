@@ -26,7 +26,7 @@ jobs:
       - name: Run node coverage
         run: |
           npm ci
-          npm test -- --coverage --watch=false
+          npm run test:coverage
 
       - name: Enforce 100% coverage
         run: |

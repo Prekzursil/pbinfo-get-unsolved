@@ -1,22 +1,30 @@
 #!/usr/bin/env python3
-from __future__ import annotations
+from __future__ import division
 
 import argparse
 import base64
+import importlib.util
 import json
 import sys
 import urllib.parse
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-_SCRIPT_DIR = Path(__file__).resolve().parent
-_HELPER_ROOT = _SCRIPT_DIR if (_SCRIPT_DIR / "security_helpers.py").exists() else _SCRIPT_DIR.parent
-if str(_HELPER_ROOT) not in sys.path:
-    sys.path.insert(0, str(_HELPER_ROOT))
 
-from security_helpers import normalize_https_url
+def _load_security_helpers():
+    helper_path = Path(__file__).resolve().parent.parent.joinpath("security_helpers.py")
+    spec = importlib.util.spec_from_file_location("security_helpers", helper_path)
+    if spec is None or spec.loader is None:
+        raise ImportError("Unable to load security_helpers module.")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_security_helpers = _load_security_helpers()
+normalize_https_url = _security_helpers.normalize_https_url
+request_json = _security_helpers.request_json
 
 SONAR_API_BASE = "https://sonarcloud.io"
 UNRESOLVED_HOTSPOT_STATUS = "TO_REVIEW"
@@ -44,18 +52,15 @@ def _auth_header(token: str) -> str:
 
 
 def _request_json(url: str, auth_header: str) -> dict[str, Any]:
-    safe_url = normalize_https_url(url, allowed_host_suffixes={"sonarcloud.io"}).rstrip("/")
-    request = urllib.request.Request(
-        safe_url,
+    return request_json(
+        url,
         headers={
             "Accept": "application/json",
             "Authorization": auth_header,
             "User-Agent": "reframe-sonar-zero-gate",
         },
-        method="GET",
+        allowed_host_suffixes={"sonarcloud.io"},
     )
-    with urllib.request.urlopen(request, timeout=30) as resp:
-        return json.loads(resp.read().decode("utf-8"))
 
 
 def _render_md(payload: dict) -> str:

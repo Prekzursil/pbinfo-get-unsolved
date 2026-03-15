@@ -6,7 +6,7 @@ const {
   nextAdaptiveThrottleState,
   migrateStateSnapshotToV2,
   extractSnapshotFromImport,
-} = require('../pbinfo-get-unsolved-enhanced.js');
+} = require('../src/core');
 
 test('backoff: exponential growth with cap and deterministic jitter bounds', () => {
   const noJitterA = computeBackoffWithJitter(0, {
@@ -124,4 +124,14 @@ test('import extractor: supports wrapped payload and rejects invalid values', ()
 
   assert.equal(extractSnapshotFromImport(null), null);
   assert.equal(extractSnapshotFromImport('abc'), null);
+  assert.equal(extractSnapshotFromImport({ foo: 'bar' }), null);
+  assert.ok(extractSnapshotFromImport({ pageQueue: [2, 3] }));
+  assert.ok(extractSnapshotFromImport({ stats: { total: 3 } }));
+  assert.equal(
+    extractSnapshotFromImport({
+      type: 'pbinfo-get-unsolved-snapshot',
+      state: 'invalid',
+    }),
+    null
+  );
 });

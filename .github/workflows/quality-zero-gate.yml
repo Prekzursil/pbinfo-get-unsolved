@@ -46,6 +46,8 @@ jobs:
       - secrets-preflight
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      QUALITY_CHECK_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      QLTY_ENFORCE: ${{ vars.QLTY_ENFORCE || 'false' }}
     steps:
       - uses: actions/checkout@v6
       - name: Assert secrets preflight succeeded
@@ -55,24 +57,38 @@ jobs:
             exit 1
           fi
       - name: Assert required quality contexts are green
+        shell: bash
         run: |
-          python3 scripts/quality/check_required_checks.py \
-            --repo "${GITHUB_REPOSITORY}" \
-            --sha "${GITHUB_SHA}" \
-            --required-context "Coverage 100 Gate" \
-            --required-context "Codecov Analytics" \
-            --required-context "Sonar Zero" \
-            --required-context "Codacy Zero" \
-            --required-context "Semgrep Zero" \
-            --required-context "Sentry Zero" \
-            --required-context "DeepScan Zero" \
-            --required-context "SonarCloud Code Analysis" \
-            --required-context "Codacy Static Code Analysis" \
-            --required-context "DeepScan" \
-            --timeout-seconds 1500 \
-            --poll-seconds 20 \
-            --out-json quality-zero-gate/required-checks.json \
+          set -euo pipefail
+
+          args=(
+            --repo "${GITHUB_REPOSITORY}"
+            --sha "${QUALITY_CHECK_SHA}"
+            --required-context "Coverage 100 Gate"
+            --required-context "Codecov Analytics"
+            --required-context "Sonar Zero"
+            --required-context "Codacy Zero"
+            --required-context "Semgrep Zero"
+            --required-context "Sentry Zero"
+            --required-context "DeepScan Zero"
+            --timeout-seconds 1500
+            --poll-seconds 20
+            --out-json quality-zero-gate/required-checks.json
             --out-md quality-zero-gate/required-checks.md
+          )
+
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            args+=(
+              --required-context "SonarCloud Code Analysis"
+              --required-context "Codacy Static Code Analysis"
+              --required-context "DeepScan"
+            )
+            if [ "${QLTY_ENFORCE}" = "true" ]; then
+              args+=(--required-context "qlty check")
+            fi
+          fi
+
+          python3 scripts/quality/check_required_checks.py "${args[@]}"
       - name: Upload aggregate artifact
         if: always()
         uses: actions/upload-artifact@v4

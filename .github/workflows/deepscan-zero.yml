@@ -17,13 +17,14 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      QUALITY_CHECK_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v6
       - name: Assert DeepScan vendor check is green
         run: |
           python3 scripts/quality/check_required_checks.py \
             --repo "${GITHUB_REPOSITORY}" \
-            --sha "${GITHUB_SHA}" \
+            --sha "${QUALITY_CHECK_SHA}" \
             --required-context "DeepScan" \
             --timeout-seconds 1200 \
             --poll-seconds 20 \

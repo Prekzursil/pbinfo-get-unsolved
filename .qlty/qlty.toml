@@ -1,0 +1,37 @@
+config_version = "0"
+
+[[source]]
+name = "default"
+default = true
+
+[smells]
+mode = "comment"
+
+[[plugin]]
+name = "actionlint"
+mode = "block"
+
+[[plugin]]
+name = "prettier"
+version = "3.4.2"
+mode = "block"
+
+exclude_patterns = [
+  "coverage/**",
+  "coverage-100/**",
+  "dist/**",
+  "node_modules/**",
+  ".tmp*/**",
+  "tests/**",
+  "tests/fixtures/**",
+  "docs/**",
+  ".github/**",
+  "package-lock.json",
+  "README.md",
+  "CHANGELOG.md",
+  "TODO.md",
+]
+
+test_patterns = [
+  "tests/**/*.test.js",
+]

@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { parseScoreText, selectScoreFromCandidates } = require('../pbinfo-get-unsolved-enhanced.js');
+const { parseScoreText, selectScoreFromCandidates, stripProblemIdPrefix } = require('../src/core');
 
 test('parseScoreText: ratio', () => {
   assert.deepEqual(parseScoreText(' 65/100 '), { value: 65, max: 100, hasRatio: true });
@@ -71,4 +71,12 @@ test('selectScoreFromCandidates: ratio beats plain value', () => {
     { tooltip: 'Punctaj', text: '30/100', value: 30, max: 100, hasRatio: true, isLink: false },
   ]);
   assert.deepEqual(res, { userScore: 30, maxScore: 100 });
+});
+
+test('stripProblemIdPrefix: returns title unchanged when no id is provided', () => {
+  assert.equal(stripProblemIdPrefix('  #123 Problema mea  ', null), '#123 Problema mea');
+});
+
+test('stripProblemIdPrefix: does not strip when the id is followed by an identifier character', () => {
+  assert.equal(stripProblemIdPrefix('#123abc Problema mea', 123), '#123abc Problema mea');
 });

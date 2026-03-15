@@ -4,7 +4,7 @@ const globals = require('globals');
 
 module.exports = [
   {
-    ignores: ['dist/**', 'node_modules/**'],
+    ignores: ['coverage/**', 'dist/**', 'node_modules/**'],
   },
   js.configs.recommended,
   {
@@ -15,6 +15,8 @@ module.exports = [
       globals: {
         ...globals.browser,
         ...globals.node,
+        browser: 'readonly',
+        chrome: 'readonly',
       },
     },
     rules: {

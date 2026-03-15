@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "pbinfo-get-unsolved",
+  "description": "Overlay scanner for unsolved pbinfo problems.",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": ["https://www.pbinfo.ro/*"],
+  "action": {
+    "default_title": "pbinfo-get-unsolved",
+    "default_popup": "popup.html"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.pbinfo.ro/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["pbinfo-core.js", "extension-bridge.js"],
+      "matches": ["https://www.pbinfo.ro/*"]
+    }
+  ]
+}

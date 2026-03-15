@@ -53,9 +53,12 @@ jobs:
 
       - name: Resolve release tag
         id: tag
+        env:
+          RELEASE_EVENT_NAME: ${{ github.event_name }}
+          RELEASE_INPUT_TAG: ${{ inputs.tag }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.tag }}" ]; then
-            echo "value=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          if [ "$RELEASE_EVENT_NAME" = "workflow_dispatch" ] && [ -n "$RELEASE_INPUT_TAG" ]; then
+            echo "value=$RELEASE_INPUT_TAG" >> "$GITHUB_OUTPUT"
           else
             echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           fi

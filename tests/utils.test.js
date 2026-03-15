@@ -8,7 +8,7 @@ const {
   problemsToLinksText,
   problemsToIdsText,
   problemsToMarkdownText,
-} = require('../pbinfo-get-unsolved-enhanced.js');
+} = require('../src/core');
 
 test('normalizeListUrl: strips pagination param', () => {
   const url = normalizeListUrl(
@@ -38,6 +38,30 @@ test('buildPageUrl: page mode', () => {
     pageBase: 1,
   });
   assert.equal(url, 'https://www.pbinfo.ro/?pagina=probleme-lista&clasa=1&page=3');
+});
+
+test('buildPageUrl: falls back when URL.canParse is unavailable', () => {
+  const canParseDescriptor = Object.getOwnPropertyDescriptor(URL, 'canParse');
+
+  Object.defineProperty(URL, 'canParse', {
+    configurable: true,
+    writable: true,
+    value: undefined,
+  });
+
+  try {
+    assert.equal(
+      buildPageUrl('https://www.pbinfo.ro/?pagina=probleme-lista', { pageIndex: 1 }),
+      'https://www.pbinfo.ro/?pagina=probleme-lista&start=0'
+    );
+    assert.equal(buildPageUrl('https://[::1', { pageIndex: 1 }), null);
+  } finally {
+    if (canParseDescriptor) {
+      Object.defineProperty(URL, 'canParse', canParseDescriptor);
+    } else {
+      delete URL.canParse;
+    }
+  }
 });
 
 test('problemsToCsv: escapes values and includes BOM', () => {

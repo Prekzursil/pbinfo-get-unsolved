@@ -1,8 +1,25 @@
 node_modules/
 
 dist/
+coverage/
+coverage-100/
+.tmp*/
+__pycache__/
+
+/.qlty/logs
+/.qlty/out
+/.qlty/plugin_cachedir
+/.qlty/results
 
 .env
 .env.*
 
 .DS_Store
+
+codacy-zero/
+deepscan-zero/
+quality-secrets/
+quality-zero-gate/
+semgrep-zero/
+sentry-zero/
+sonar-zero/

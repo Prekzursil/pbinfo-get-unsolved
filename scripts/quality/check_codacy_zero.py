@@ -1,22 +1,29 @@
 #!/usr/bin/env python3
-from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import sys
-import urllib.error
 import urllib.parse
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-_SCRIPT_DIR = Path(__file__).resolve().parent
-_HELPER_ROOT = _SCRIPT_DIR if (_SCRIPT_DIR / "security_helpers.py").exists() else _SCRIPT_DIR.parent
-if str(_HELPER_ROOT) not in sys.path:
-    sys.path.insert(0, str(_HELPER_ROOT))
 
-from security_helpers import normalize_https_url
+def _load_security_helpers():
+    helper_path = Path(__file__).resolve().parent.parent.joinpath("security_helpers.py")
+    spec = importlib.util.spec_from_file_location("security_helpers", helper_path)
+    if spec is None or spec.loader is None:
+        raise ImportError("Unable to load security_helpers module.")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_security_helpers = _load_security_helpers()
+HttpsStatusError = _security_helpers.HttpsStatusError
+normalize_https_url = _security_helpers.normalize_https_url
+request_json = _security_helpers.request_json
 
 
 TOTAL_KEYS = {"total", "totalItems", "total_items", "count", "hits", "open_issues"}
@@ -35,24 +42,17 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _request_json(url: str, token: str, *, method: str = "GET", data: dict[str, Any] | None = None) -> dict[str, Any]:
-    safe_url = normalize_https_url(url, allowed_host_suffixes={"codacy.com"}).rstrip("/")
-    body = None
-    headers = {
-        "Accept": "application/json",
-        "api-token": token,
-        "User-Agent": "reframe-codacy-zero-gate",
-    }
-    if data is not None:
-        body = json.dumps(data).encode("utf-8")
-        headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(
-        safe_url,
-        headers=headers,
+    return request_json(
+        url,
+        headers={
+            "Accept": "application/json",
+            "api-token": token,
+            "User-Agent": "reframe-codacy-zero-gate",
+        },
         method=method,
-        data=body,
+        data=data,
+        allowed_host_suffixes={"codacy.com"},
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode("utf-8"))
 
 
 def extract_total_open(payload: Any) -> int | None:
@@ -149,11 +149,11 @@ def main() -> int:
                     findings.append(f"Codacy reports {open_issues} open issues (expected 0).")
                 status = "pass" if not findings else "fail"
                 break
-            except urllib.error.HTTPError as exc:
+            except HttpsStatusError as exc:
                 last_exc = exc
-                if exc.code == 404:
+                if exc.status_code == 404:
                     continue
-                findings.append(f"Codacy API request failed: HTTP {exc.code}")
+                findings.append(f"Codacy API request failed: HTTP {exc.status_code}")
                 status = "fail"
                 break
             except Exception as exc:  # pragma: no cover - network/runtime surface

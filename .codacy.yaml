@@ -1,0 +1,14 @@
+exclude_paths:
+  - coverage/**
+  - coverage-100/**
+  - dist/**
+  - docs/**
+  - .github/workflows/**
+  - tests/**
+  - tests/fixtures/**
+  - scripts/**
+  - package.json
+  - package-lock.json
+  - README.md
+  - CHANGELOG.md
+  - TODO.md

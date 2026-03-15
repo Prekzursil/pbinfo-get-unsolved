@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   codecov-analytics:
@@ -33,7 +34,7 @@ jobs:
         continue-on-error: true
         run: |
           npm ci
-          npm test -- --coverage --watch=false
+          npm run test:coverage
       - name: Upload coverage to Codecov
         if: ${{ always() }}
         uses: codecov/codecov-action@v5
@@ -48,3 +49,9 @@ jobs:
         with:
           api-token: ${{ env.CODACY_API_TOKEN }}
           coverage-reports: coverage/lcov.info
+      - name: Upload coverage to Qlty
+        if: ${{ always() }}
+        uses: qltysh/qlty-action/coverage@a19242102d17e497f437d7466aa01b528537e899
+        with:
+          files: coverage/lcov.info
+          oidc: true

@@ -1,0 +1,114 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const rootDir = path.join(__dirname, '..');
+
+function readRepoFile(relativePath) {
+  return fs.readFileSync(path.join(rootDir, relativePath), 'utf8');
+}
+
+function extractNamedRunBlock(workflowText, stepName) {
+  const lines = workflowText.split(/\r?\n/);
+  const target = `- name: ${stepName}`;
+  const startIndex = lines.findIndex((line) => line.trim() === target);
+
+  if (startIndex === -1) {
+    return null;
+  }
+
+  const runIndex = lines.findIndex(
+    (line, index) => index > startIndex && line.startsWith('        run: |')
+  );
+
+  if (runIndex === -1) {
+    return null;
+  }
+
+  const blockLines = [];
+  for (let index = runIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line.startsWith('        - name: ') || line.startsWith('      - name: ')) {
+      break;
+    }
+    if (line === '' || line.startsWith('          ')) {
+      blockLines.push(line);
+      continue;
+    }
+    break;
+  }
+
+  return blockLines.length > 0 ? blockLines.join('\n') : null;
+}
+
+test('static-analysis guardrails helper extracts workflow run blocks without nested backtracking regex', () => {
+  const workflowText = [
+    'jobs:',
+    '  release:',
+    '    steps:',
+    '      - name: Resolve release tag',
+    '        run: |',
+    '          echo "hello"',
+    '          echo "world"',
+    '      - name: Next step',
+    '        run: echo "done"',
+  ].join('\n');
+
+  assert.equal(
+    extractNamedRunBlock(workflowText, 'Resolve release tag'),
+    ['          echo "hello"', '          echo "world"'].join('\n')
+  );
+});
+
+test('static-analysis guardrails: no known Semgrep-triggering patterns remain in maintained source', () => {
+  const scoreParsing = readRepoFile('src/core/score-parsing.js');
+  const runtime = readRepoFile('src/core/pbinfo-runtime.js');
+  const runtimePageParsing = readRepoFile('src/core/runtime-page-parsing.js');
+  const runtimeStorageSetup = readRepoFile('src/core/runtime-storage-setup.js');
+  const network = readRepoFile('src/core/network.js');
+  const runtimeStorage = readRepoFile('src/core/runtime-storage.js');
+  const pythonQualityTests = readRepoFile('tests/python-quality-scripts.test.js');
+  const qualitySecretsPreflight = readRepoFile('tests/quality-secrets-preflight.test.js');
+  const buildRelease = readRepoFile('scripts/build-release.cjs');
+  const securityHelpers = readRepoFile('scripts/security_helpers.py');
+  const coreIndex = readRepoFile('src/core/index.js');
+  const releaseWorkflow = readRepoFile('.github/workflows/release.yml');
+  const resolveReleaseTagRunBlock = extractNamedRunBlock(releaseWorkflow, 'Resolve release tag');
+  const qualityScripts = [
+    'scripts/quality/check_codacy_zero.py',
+    'scripts/quality/check_deepscan_zero.py',
+    'scripts/quality/check_required_checks.py',
+    'scripts/quality/check_sentry_zero.py',
+    'scripts/quality/check_sonar_zero.py',
+  ];
+
+  assert.ok(
+    resolveReleaseTagRunBlock,
+    'Could not locate "Resolve release tag" run block in release workflow'
+  );
+  assert.doesNotMatch(scoreParsing, /\bnew RegExp\(/);
+  assert.doesNotMatch(scoreParsing, /\/\w\/\.(?:test|exec)\(/);
+  assert.doesNotMatch(runtime, /\.innerHTML\s*=/);
+  assert.doesNotMatch(runtimePageParsing, /function createProblemRecord\(/);
+  assert.doesNotMatch(runtimeStorageSetup, /function updateSetupWizardView\(\s*\{/);
+  assert.doesNotMatch(runtime, /console\.warn\(`Failed to save/);
+  assert.doesNotMatch(network, /catch \(error\) \{\s*void error;\s*return null;/);
+  assert.doesNotMatch(runtimeStorage, /catch \(error\) \{\s*void error;/);
+  assert.doesNotMatch(pythonQualityTests, /process\.env\.PYTHON/);
+  assert.doesNotMatch(pythonQualityTests, /spawnSync\(candidate\.command/);
+  assert.doesNotMatch(pythonQualityTests, /\[\s*'-c'\s*,\s*source\s*\]/);
+  assert.doesNotMatch(qualitySecretsPreflight, /process\.env\.PYTHON/);
+  assert.doesNotMatch(qualitySecretsPreflight, /spawnSync\(candidate\.command/);
+  assert.match(buildRelease, /require\('esbuild'\)/);
+  assert.doesNotMatch(buildRelease, /return `\(function\(\)\{const __modules=\{/);
+  assert.doesNotMatch(securityHelpers, /\bHTTPSConnection\s*\(/);
+  assert.match(releaseWorkflow, /RELEASE_EVENT_NAME:\s+\$\{\{\s*github\.event_name\s*\}\}/);
+  assert.match(releaseWorkflow, /RELEASE_INPUT_TAG:\s+\$\{\{\s*inputs\.tag\s*\}\}/);
+  assert.match(coreIndex, /require\('\.\/progress'\)/);
+  assert.doesNotMatch(resolveReleaseTagRunBlock, /\$\{\{/);
+
+  qualityScripts.forEach((relativePath) => {
+    assert.doesNotMatch(readRepoFile(relativePath), /urllib\.request\.urlopen\(/, relativePath);
+  });
+});

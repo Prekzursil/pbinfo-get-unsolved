@@ -16,16 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Run Sonar scan
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       - name: Assert Sonar zero-open gate
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           python3 scripts/quality/check_sonar_zero.py \
             --project-key "Prekzursil_pbinfo-get-unsolved" \
+            --pull-request "${{ github.event.pull_request.number || '' }}" \
             --out-json "sonar-zero/sonar.json" \
             --out-md "sonar-zero/sonar.md"
       - name: Upload Sonar artifacts

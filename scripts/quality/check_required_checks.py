@@ -1,16 +1,30 @@
 #!/usr/bin/env python3
-from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import sys
 import time
-import urllib.parse
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+def _load_security_helpers():
+    helper_dir = Path(__file__).resolve().parent
+    helper_path = helper_dir.joinpath("security_helpers.py")
+    if not os.path.exists(str(helper_path)):
+        helper_path = helper_dir.parent.joinpath("security_helpers.py")
+    spec = importlib.util.spec_from_file_location("security_helpers", helper_path)
+    if spec is None or spec.loader is None:
+        raise ImportError("Unable to load security_helpers module.")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_security_helpers = _load_security_helpers()
+request_json = _security_helpers.request_json
 
 
 def _parse_args() -> argparse.Namespace:
@@ -27,7 +41,7 @@ def _parse_args() -> argparse.Namespace:
 
 def _api_get(repo: str, path: str, token: str) -> dict[str, Any]:
     url = f"https://api.github.com/repos/{repo}/{path.lstrip('/')}"
-    req = urllib.request.Request(
+    return request_json(
         url,
         headers={
             "Accept": "application/vnd.github+json",
@@ -35,10 +49,8 @@ def _api_get(repo: str, path: str, token: str) -> dict[str, Any]:
             "X-GitHub-Api-Version": "2022-11-28",
             "User-Agent": "reframe-quality-zero-gate",
         },
-        method="GET",
+        allowed_hosts={"api.github.com"},
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode("utf-8"))
 
 
 def _collect_contexts(check_runs_payload: dict[str, Any], status_payload: dict[str, Any]) -> dict[str, dict[str, str]]:

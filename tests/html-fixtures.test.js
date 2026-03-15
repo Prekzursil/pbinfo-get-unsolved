@@ -11,7 +11,7 @@ const {
   extractProblemMetaFromProblemPage,
   classifyProblemStatus,
   parseTotalProblems,
-} = require('../pbinfo-get-unsolved-enhanced.js');
+} = require('../src/core');
 
 function loadFixture(name) {
   const p = path.join(__dirname, 'fixtures', name);
