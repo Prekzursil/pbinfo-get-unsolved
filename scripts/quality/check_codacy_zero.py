@@ -246,6 +246,13 @@ def _is_retryable_stale(*, expected_sha: str, findings: list[str], deadline: flo
     return any("branch analysis is stale" in finding for finding in findings)
 
 
+def _build_missing_provider_findings(providers: list[str], last_exc: Exception | None) -> list[str]:
+    findings = [f"Codacy API endpoint was not found for provider(s): {', '.join(providers)}."]
+    if last_exc is not None:
+        findings.append(f"Last Codacy API error: {last_exc}")
+    return findings
+
+
 
 def _poll_branch_zero_gate(
     *,
@@ -309,9 +316,7 @@ def _poll_branch_zero_gate(
             break
 
         if not provider_found:
-            findings.append(f"Codacy API endpoint was not found for provider(s): {', '.join(providers)}.")
-            if last_exc is not None:
-                findings.append(f"Last Codacy API error: {last_exc}")
+            findings.extend(_build_missing_provider_findings(providers, last_exc))
 
         if retryable_stale:
             time.sleep(max(poll_seconds, 1))
