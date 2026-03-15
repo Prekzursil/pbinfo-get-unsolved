@@ -14,6 +14,7 @@ jobs:
   secrets-preflight:
     name: Quality Secrets Preflight
     runs-on: ubuntu-latest
+    environment: quality-gates
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       CODACY_API_TOKEN: ${{ secrets.CODACY_API_TOKEN }}
@@ -26,6 +27,8 @@ jobs:
       DEEPSCAN_API_TOKEN: ${{ secrets.DEEPSCAN_API_TOKEN }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
       - name: Run quality secrets preflight
         run: |
           python3 scripts/quality/check_quality_secrets.py \
@@ -51,6 +54,8 @@ jobs:
       QLTY_ENFORCE: ${{ vars.QLTY_ENFORCE || 'false' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
       - name: Assert secrets preflight succeeded
         if: needs.secrets-preflight.result != 'success'
         run: |

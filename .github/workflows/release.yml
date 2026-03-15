@@ -14,11 +14,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
 
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 20
+          package-manager-cache: false
 
       - name: Install
         run: npm ci
@@ -45,12 +48,21 @@ jobs:
             > checksums.sha256
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@b25b93d384199fc0fc8c2e126b2d937a0cbeb2ae
-        with:
-          tag_name: ${{ github.ref_name }}
-          generate_release_notes: true
-          files: |
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          assets=(
             dist/pbinfo-get-unsolved.userscript.js
             dist/pbinfo-get-unsolved.min.js
             dist/pbinfo-get-unsolved.bookmarklet.txt
             dist/checksums.sha256
+          )
+
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" "${assets[@]}" --clobber
+          else
+            gh release create "${tag}" "${assets[@]}" --generate-notes
+          fi

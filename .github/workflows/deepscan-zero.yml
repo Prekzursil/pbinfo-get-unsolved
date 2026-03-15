@@ -20,6 +20,8 @@ jobs:
       QUALITY_CHECK_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
       - name: Assert DeepScan vendor check is green
         run: |
           python3 scripts/quality/check_required_checks.py \

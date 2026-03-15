@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import absolute_import, annotations
 
 import argparse
 import importlib.util
@@ -8,7 +9,7 @@ import time
 import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 
 
 def _load_security_helpers():
@@ -60,7 +61,13 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _request_json(url: str, token: str, *, method: str = "GET", data: dict[str, Any] | None = None) -> dict[str, Any]:
+def _request_json(
+    url: str,
+    token: str,
+    *,
+    method: str = "GET",
+    data: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     return request_json(
         url,
         headers={
@@ -74,7 +81,7 @@ def _request_json(url: str, token: str, *, method: str = "GET", data: dict[str, 
     )
 
 
-def extract_total_open(payload: Any) -> int | None:
+def extract_total_open(payload: Any) -> Optional[int]:
     if isinstance(payload, dict):
         for key, value in payload.items():
             if key in TOTAL_KEYS and isinstance(value, (int, float)):
@@ -101,7 +108,7 @@ def extract_total_open(payload: Any) -> int | None:
     return None
 
 
-def extract_repository_payload(payload: Any) -> dict[str, Any]:
+def extract_repository_payload(payload: Any) -> Dict[str, Any]:
     if not isinstance(payload, dict):
         return {}
     data = payload.get("data")
@@ -131,7 +138,7 @@ def extract_last_analysed_sha(payload: Any) -> str:
     return ""
 
 
-def extract_repository_issue_count(payload: Any) -> int | None:
+def extract_repository_issue_count(payload: Any) -> Optional[int]:
     repository_payload = extract_repository_payload(payload)
     issues_count = repository_payload.get("issuesCount")
     if isinstance(issues_count, (int, float)):
@@ -162,7 +169,7 @@ def _render_md(payload: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _safe_output_path(raw: str, fallback: str, base: Path | None = None) -> Path:
+def _safe_output_path(raw: str, fallback: str, base: Optional[Path] = None) -> Path:
     root = (base or Path.cwd()).resolve()
     candidate = Path((raw or "").strip() or fallback).expanduser()
     if not candidate.is_absolute():
@@ -185,13 +192,18 @@ def _build_backlog_url(api_base: str, provider: str, owner: str, repo: str) -> s
     return f"{api_base}/api/v3/analysis/organizations/{provider}/{owner}/repositories/{repo}/issues/search?{query}"
 
 
-def _provider_candidates(primary_provider: str) -> list[str]:
+def _provider_candidates(primary_provider: str) -> List[str]:
     return list(dict.fromkeys(p for p in (primary_provider, "gh", "github") if p))
 
 
 def _build_branch_findings(
-    *, branch: str, expected_sha: str, selected_branch: str, analysed_sha: str, open_issues: int | None
-) -> list[str]:
+    *,
+    branch: str,
+    expected_sha: str,
+    selected_branch: str,
+    analysed_sha: str,
+    open_issues: Optional[int],
+) -> List[str]:
     if not selected_branch:
         return ["Codacy branch lookup did not return a selected branch name."]
     if selected_branch != branch:
@@ -215,7 +227,7 @@ def _query_branch_provider(
     repo: str,
     branch: str,
     expected_sha: str,
-) -> tuple[bool, bool, str, str, int | None, list[str], Exception | None]:
+) -> Tuple[bool, bool, str, str, Optional[int], List[str], Optional[Exception]]:
     url = _build_repository_url(api_base, provider, owner, repo, branch)
     try:
         payload = _request_json(url, token)
@@ -234,11 +246,11 @@ def _query_branch_provider(
         if exc.status_code == 404:
             return False, True, "", "", None, [], exc
         return False, False, "", "", None, [f"Codacy API request failed: HTTP {exc.status_code}"], exc
-    except Exception as exc:  # pragma: no cover - network/runtime surface
+    except (RuntimeError, ValueError, TypeError) as exc:  # pragma: no cover - network/runtime surface
         return False, False, "", "", None, [f"Codacy API request failed: {exc}"], exc
 
 
-def _is_retryable_stale(*, expected_sha: str, findings: list[str], deadline: float) -> bool:
+def _is_retryable_stale(*, expected_sha: str, findings: List[str], deadline: float) -> bool:
     if not expected_sha:
         return False
     if time.monotonic() >= deadline:
@@ -246,52 +258,29 @@ def _is_retryable_stale(*, expected_sha: str, findings: list[str], deadline: flo
     return any("branch analysis is stale" in finding for finding in findings)
 
 
-def _build_missing_provider_findings(providers: list[str], last_exc: Exception | None) -> list[str]:
+def _build_missing_provider_findings(providers: List[str], last_exc: Optional[Exception]) -> List[str]:
     findings = [f"Codacy API endpoint was not found for provider(s): {', '.join(providers)}."]
     if last_exc is not None:
         findings.append(f"Last Codacy API error: {last_exc}")
     return findings
 
 
-
-def _poll_branch_zero_gate(
+def _query_branch_providers_once(
     *,
     api_base: str,
     token: str,
-    providers: list[str],
-    owner: str,
-    repo: str,
+    providers: List[str],
+    repository: Tuple[str, str],
     branch: str,
     expected_sha: str,
-    timeout_seconds: int,
-    poll_seconds: int,
-) -> tuple[str, int | None, str, str, list[str]]:
-    deadline = time.monotonic() + max(timeout_seconds, 0)
-    last_exc: Exception | None = None
-    selected_branch = ""
-    analysed_sha = ""
-    open_issues: int | None = None
-    findings: list[str] = []
+    deadline: float,
+) -> Tuple[str, Optional[int], str, str, List[str]]:
+    owner, repo = repository
+    last_exc: Optional[Exception] = None
 
-    while True:
-        findings = []
-        last_exc = None
-        selected_branch = ""
-        analysed_sha = ""
-        open_issues = None
-
-        provider_found = False
-        retryable_stale = False
-        for provider in providers:
-            (
-                provider_passed,
-                provider_not_found,
-                selected_branch,
-                analysed_sha,
-                open_issues,
-                findings,
-                provider_error,
-            ) = _query_branch_provider(
+    for provider in providers:
+        provider_passed, provider_not_found, selected_branch, analysed_sha, open_issues, findings, provider_error = (
+            _query_branch_provider(
                 api_base=api_base,
                 token=token,
                 provider=provider,
@@ -300,31 +289,52 @@ def _poll_branch_zero_gate(
                 branch=branch,
                 expected_sha=expected_sha,
             )
-            last_exc = provider_error
-            if provider_not_found:
-                continue
+        )
+        last_exc = provider_error
+        if provider_not_found:
+            continue
+        if provider_passed:
+            return "pass", open_issues, selected_branch, analysed_sha, []
+        if _is_retryable_stale(expected_sha=expected_sha, findings=findings, deadline=deadline):
+            return "retry", open_issues, selected_branch, analysed_sha, findings
+        return "fail", open_issues, selected_branch, analysed_sha, findings
 
-            provider_found = True
-            if provider_passed:
-                return "pass", open_issues, selected_branch, analysed_sha, []
+    return "fail", None, "", "", _build_missing_provider_findings(providers, last_exc)
 
-            retryable_stale = _is_retryable_stale(
-                expected_sha=expected_sha,
-                findings=findings,
-                deadline=deadline,
-            )
-            break
 
-        if not provider_found:
-            findings.extend(_build_missing_provider_findings(providers, last_exc))
 
-        if retryable_stale:
+def _poll_branch_zero_gate(
+    *,
+    api_base: str,
+    token: str,
+    providers: List[str],
+    repository: Tuple[str, str],
+    branch: str,
+    expected_sha: str,
+    timeout_seconds: int,
+    poll_seconds: int,
+) -> Tuple[str, Optional[int], str, str, List[str]]:
+    deadline = time.monotonic() + max(timeout_seconds, 0)
+
+    while True:
+        status, open_issues, selected_branch, analysed_sha, findings = _query_branch_providers_once(
+            api_base=api_base,
+            token=token,
+            providers=providers,
+            repository=repository,
+            branch=branch,
+            expected_sha=expected_sha,
+            deadline=deadline,
+        )
+        if status == "pass":
+            return "pass", open_issues, selected_branch, analysed_sha, []
+        if status == "retry":
             time.sleep(max(poll_seconds, 1))
             continue
         return "fail", open_issues, selected_branch, analysed_sha, findings
 
 
-def _build_backlog_findings(open_issues: int | None) -> list[str]:
+def _build_backlog_findings(open_issues: Optional[int]) -> List[str]:
     if open_issues is None:
         return ["Codacy response did not include a parseable total issue count."]
     if open_issues != 0:
@@ -334,7 +344,7 @@ def _build_backlog_findings(open_issues: int | None) -> list[str]:
 
 def _query_backlog_provider(
     *, api_base: str, token: str, provider: str, owner: str, repo: str
-) -> tuple[bool, bool, int | None, list[str], Exception | None]:
+) -> Tuple[bool, bool, Optional[int], List[str], Optional[Exception]]:
     url = _build_backlog_url(api_base, provider, owner, repo)
     try:
         payload = _request_json(url, token, method="POST", data={})
@@ -345,14 +355,14 @@ def _query_backlog_provider(
         if exc.status_code == 404:
             return False, True, None, [], exc
         return False, False, None, [f"Codacy API request failed: HTTP {exc.status_code}"], exc
-    except Exception as exc:  # pragma: no cover - network/runtime surface
+    except (RuntimeError, ValueError, TypeError) as exc:  # pragma: no cover - network/runtime surface
         return False, False, None, [f"Codacy API request failed: {exc}"], exc
 
 
 def _check_repository_backlog_zero(
-    *, api_base: str, token: str, providers: list[str], owner: str, repo: str
-) -> tuple[str, int | None, list[str]]:
-    last_exc: Exception | None = None
+    *, api_base: str, token: str, providers: List[str], owner: str, repo: str
+) -> Tuple[str, Optional[int], List[str]]:
+    last_exc: Optional[Exception] = None
 
     for provider in providers:
         provider_passed, provider_not_found, open_issues, findings, provider_error = _query_backlog_provider(
@@ -381,8 +391,8 @@ def main() -> int:
     branch = (args.branch or "").strip()
     expected_sha = (args.expected_sha or "").strip()
 
-    findings: list[str] = []
-    open_issues: int | None = None
+    findings: List[str] = []
+    open_issues: Optional[int] = None
     selected_branch = ""
     analysed_sha = ""
 
@@ -391,13 +401,13 @@ def main() -> int:
         status = "fail"
     else:
         providers = _provider_candidates(args.provider)
+        repository = (owner, repo)
         if branch:
             status, open_issues, selected_branch, analysed_sha, findings = _poll_branch_zero_gate(
                 api_base=api_base,
                 token=token,
                 providers=providers,
-                owner=owner,
-                repo=repo,
+                repository=repository,
                 branch=branch,
                 expected_sha=expected_sha,
                 timeout_seconds=args.timeout_seconds,

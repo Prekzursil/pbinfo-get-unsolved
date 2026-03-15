@@ -74,8 +74,11 @@ test('workflow security guardrails pin refs for ci/release workflow lanes', () =
   assertPinnedRefs(workflows.release, [
     /actions\/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5/,
     /actions\/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020/,
-    /softprops\/action-gh-release@b25b93d384199fc0fc8c2e126b2d937a0cbeb2ae/,
   ]);
+  assert.match(workflows.release, /GH_TOKEN: \$\{\{ github\.token \}\}/);
+  assert.match(workflows.release, /gh release create/);
+  assert.match(workflows.release, /gh release upload/);
+  assert.doesNotMatch(workflows.release, /softprops\/action-gh-release/);
 });
 
 test('workflow security guardrails pin refs for codecov/codacy reporting lane', () => {

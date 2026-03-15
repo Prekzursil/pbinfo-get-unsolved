@@ -9,6 +9,14 @@ function readRepoFile(relativePath) {
   return fs.readFileSync(path.join(rootDir, relativePath), 'utf8');
 }
 
+function isWorkflowStepBoundary(line) {
+  return line.startsWith('        - name: ') || line.startsWith('      - name: ');
+}
+
+function isRunBlockContentLine(line) {
+  return line === '' || line.startsWith('          ');
+}
+
 function extractNamedRunBlock(workflowText, stepName) {
   const lines = workflowText.split(/\r?\n/);
   const target = `- name: ${stepName}`;
@@ -29,14 +37,13 @@ function extractNamedRunBlock(workflowText, stepName) {
   const blockLines = [];
   for (let index = runIndex + 1; index < lines.length; index += 1) {
     const line = lines[index];
-    if (line.startsWith('        - name: ') || line.startsWith('      - name: ')) {
+    if (isWorkflowStepBoundary(line)) {
       break;
     }
-    if (line === '' || line.startsWith('          ')) {
-      blockLines.push(line);
-      continue;
+    if (!isRunBlockContentLine(line)) {
+      break;
     }
-    break;
+    blockLines.push(line);
   }
 
   return blockLines.length > 0 ? blockLines.join('\n') : null;
@@ -113,9 +120,9 @@ test('static-analysis guardrails: no known Semgrep-triggering patterns remain in
   assert.match(buildRelease, /require\('esbuild'\)/);
   assert.doesNotMatch(buildRelease, /return `\(function\(\)\{const __modules=\{/);
   assert.doesNotMatch(securityHelpers, /\bHTTPSConnection\s*\(/);
-  assert.doesNotMatch(releaseWorkflow, /workflow_dispatch:\s*\n\s+inputs:/);
+  assert.doesNotMatch(releaseWorkflow, /workflow_dispatch:[ \t]*\r?\n[ \t]+inputs:/);
   assert.doesNotMatch(releaseWorkflow, /\bResolve release tag\b/);
-  assert.match(releaseWorkflow, /tag_name:\s+\$\{\{\s*github\.ref_name\s*\}\}/);
+  assert.match(releaseWorkflow, /tag="\$\{GITHUB_REF_NAME\}"/);
   assert.doesNotMatch(releaseWorkflow, /RELEASE_EVENT_NAME/);
   assert.doesNotMatch(releaseWorkflow, /RELEASE_INPUT_TAG/);
   assert.match(coreIndex, /require\('\.\/progress'\)/);

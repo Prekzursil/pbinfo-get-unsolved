@@ -14,12 +14,15 @@ jobs:
   sentry-zero:
     name: Sentry Zero
     runs-on: ubuntu-latest
+    environment: quality-gates
     env:
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
       SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
       - name: Assert Sentry unresolved issues are zero
         run: |
           python3 scripts/quality/check_sentry_zero.py \

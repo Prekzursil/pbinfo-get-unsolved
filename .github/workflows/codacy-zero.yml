@@ -14,11 +14,14 @@ jobs:
   codacy-zero:
     name: Codacy Zero
     runs-on: ubuntu-latest
+    environment: quality-gates
     env:
       QUALITY_BRANCH: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
       EXPECTED_ANALYSIS_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
       - name: Assert Codacy zero-open gate
         env:
           CODACY_API_TOKEN: ${{ secrets.CODACY_API_TOKEN }}
