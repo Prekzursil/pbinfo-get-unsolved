@@ -201,65 +201,32 @@ test('runtime complexity helpers: snapshot normalizers apply defensive defaults'
 });
 
 function assertSnapshotAppliersMutateTargetsSafely() {
-  const pagination = {
-    mode: 'offset',
-    param: 'start',
-    pageBase: 1,
-  };
-  applyPaginationSnapshot(pagination, {
-    mode: 'page',
-    param: 'p',
-    pageBase: 10,
-  });
-  assert.deepEqual(pagination, {
-    mode: 'page',
-    param: 'p',
-    pageBase: 10,
-  });
+  const pagination = { mode: 'offset', param: 'start', pageBase: 1 };
+  applyPaginationSnapshot(pagination, { mode: 'page', param: 'p', pageBase: 10 });
+  assert.deepEqual(pagination, { mode: 'page', param: 'p', pageBase: 10 });
 
   const idRange = {
     startId: 1,
     endId: 8000,
     stopAfterMissing: 0,
-    scoreBatch: {
-      enabled: true,
-      size: 200,
-    },
+    scoreBatch: { enabled: true, size: 200 },
   };
   applyIdRangeSnapshot(idRange, {
     startId: 22,
     endId: 99,
     stopAfterMissing: 5,
-    scoreBatch: {
-      enabled: false,
-      size: 50,
-    },
+    scoreBatch: { enabled: false, size: 50 },
   });
   assert.deepEqual(idRange, {
     startId: 22,
     endId: 99,
     stopAfterMissing: 5,
-    scoreBatch: {
-      enabled: false,
-      size: 50,
-    },
+    scoreBatch: { enabled: false, size: 50 },
   });
 
-  const sorted = {
-    id: 1,
-    score: -1,
-    difficulty: 0,
-  };
-  applySortedSnapshot(sorted, {
-    id: -1,
-    score: 1,
-    difficulty: Number.NaN,
-  });
-  assert.deepEqual(sorted, {
-    id: -1,
-    score: 1,
-    difficulty: 0,
-  });
+  const sorted = { id: 1, score: -1, difficulty: 0 };
+  applySortedSnapshot(sorted, { id: -1, score: 1, difficulty: Number.NaN });
+  assert.deepEqual(sorted, { id: -1, score: 1, difficulty: 0 });
 }
 
 test('runtime complexity helpers: pagination/id-range/sorted snapshot appliers mutate targets safely', function paginationAndSnapshotApplierBranches() {
