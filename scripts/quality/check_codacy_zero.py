@@ -189,6 +189,64 @@ def _provider_candidates(primary_provider: str) -> list[str]:
     return list(dict.fromkeys(p for p in (primary_provider, "gh", "github") if p))
 
 
+def _build_branch_findings(
+    *, branch: str, expected_sha: str, selected_branch: str, analysed_sha: str, open_issues: int | None
+) -> list[str]:
+    if not selected_branch:
+        return ["Codacy branch lookup did not return a selected branch name."]
+    if selected_branch != branch:
+        return [f"Codacy selected branch {selected_branch!r} instead of the expected branch {branch!r}."]
+    if expected_sha and analysed_sha != expected_sha:
+        observed = analysed_sha or "none"
+        return [f"Codacy branch analysis is stale: expected {expected_sha}, observed {observed}."]
+    if open_issues is None:
+        return ["Codacy branch response did not include a parseable issue count."]
+    if open_issues != 0:
+        return [f"Codacy reports {open_issues} open issues for branch {branch!r} (expected 0)."]
+    return []
+
+
+def _query_branch_provider(
+    *,
+    api_base: str,
+    token: str,
+    provider: str,
+    owner: str,
+    repo: str,
+    branch: str,
+    expected_sha: str,
+) -> tuple[bool, bool, str, str, int | None, list[str], Exception | None]:
+    url = _build_repository_url(api_base, provider, owner, repo, branch)
+    try:
+        payload = _request_json(url, token)
+        selected_branch = extract_selected_branch_name(payload)
+        analysed_sha = extract_last_analysed_sha(payload)
+        open_issues = extract_repository_issue_count(payload)
+        findings = _build_branch_findings(
+            branch=branch,
+            expected_sha=expected_sha,
+            selected_branch=selected_branch,
+            analysed_sha=analysed_sha,
+            open_issues=open_issues,
+        )
+        return not findings, False, selected_branch, analysed_sha, open_issues, findings, None
+    except HttpsStatusError as exc:
+        if exc.status_code == 404:
+            return False, True, "", "", None, [], exc
+        return False, False, "", "", None, [f"Codacy API request failed: HTTP {exc.status_code}"], exc
+    except Exception as exc:  # pragma: no cover - network/runtime surface
+        return False, False, "", "", None, [f"Codacy API request failed: {exc}"], exc
+
+
+def _is_retryable_stale(*, expected_sha: str, findings: list[str], deadline: float) -> bool:
+    if not expected_sha:
+        return False
+    if time.monotonic() >= deadline:
+        return False
+    return any("branch analysis is stale" in finding for finding in findings)
+
+
+
 def _poll_branch_zero_gate(
     *,
     api_base: str,
@@ -215,58 +273,47 @@ def _poll_branch_zero_gate(
         analysed_sha = ""
         open_issues = None
 
+        provider_found = False
+        retryable_stale = False
         for provider in providers:
-            url = _build_repository_url(api_base, provider, owner, repo, branch)
-            try:
-                payload = _request_json(url, token)
-                selected_branch = extract_selected_branch_name(payload)
-                analysed_sha = extract_last_analysed_sha(payload)
-                open_issues = extract_repository_issue_count(payload)
+            (
+                provider_passed,
+                provider_not_found,
+                selected_branch,
+                analysed_sha,
+                open_issues,
+                findings,
+                provider_error,
+            ) = _query_branch_provider(
+                api_base=api_base,
+                token=token,
+                provider=provider,
+                owner=owner,
+                repo=repo,
+                branch=branch,
+                expected_sha=expected_sha,
+            )
+            last_exc = provider_error
+            if provider_not_found:
+                continue
 
-                if not selected_branch:
-                    findings.append("Codacy branch lookup did not return a selected branch name.")
-                    break
-                if selected_branch != branch:
-                    findings.append(
-                        f"Codacy selected branch {selected_branch!r} instead of the expected branch {branch!r}."
-                    )
-                    break
-                if expected_sha and analysed_sha != expected_sha:
-                    findings.append(
-                        f"Codacy branch analysis is stale: expected {expected_sha}, observed {analysed_sha or 'none'}."
-                    )
-                    break
-                if open_issues is None:
-                    findings.append("Codacy branch response did not include a parseable issue count.")
-                    break
-                if open_issues != 0:
-                    findings.append(
-                        f"Codacy reports {open_issues} open issues for branch {branch!r} (expected 0)."
-                    )
-                    break
-
+            provider_found = True
+            if provider_passed:
                 return "pass", open_issues, selected_branch, analysed_sha, []
-            except HttpsStatusError as exc:
-                last_exc = exc
-                if exc.status_code == 404:
-                    continue
-                findings.append(f"Codacy API request failed: HTTP {exc.status_code}")
-                break
-            except Exception as exc:  # pragma: no cover - network/runtime surface
-                last_exc = exc
-                findings.append(f"Codacy API request failed: {exc}")
-                break
-        else:
+
+            retryable_stale = _is_retryable_stale(
+                expected_sha=expected_sha,
+                findings=findings,
+                deadline=deadline,
+            )
+            break
+
+        if not provider_found:
             findings.append(f"Codacy API endpoint was not found for provider(s): {', '.join(providers)}.")
             if last_exc is not None:
                 findings.append(f"Last Codacy API error: {last_exc}")
 
-        should_wait = bool(
-            expected_sha
-            and any("branch analysis is stale" in finding for finding in findings)
-            and time.monotonic() < deadline
-        )
-        if should_wait:
+        if retryable_stale:
             time.sleep(max(poll_seconds, 1))
             continue
         return "fail", open_issues, selected_branch, analysed_sha, findings
