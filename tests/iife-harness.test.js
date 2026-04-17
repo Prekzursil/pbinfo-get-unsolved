@@ -78,6 +78,29 @@ function clickAllButtons(window, document) {
   }
 }
 
+function makeEmptySnapshot(
+  pageLink = 'https://www.pbinfo.ro/?pagina=probleme-lista',
+  overrides = {}
+) {
+  return {
+    version: 2,
+    schemaVersion: 2,
+    storageLevel: 'full',
+    savedAt: Date.now(),
+    pageLink,
+    scanMode: 'list',
+    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
+    scanStartPage: 1,
+    pageQueue: [],
+    deferred: [],
+    inFlightPages: [],
+    seenProblemIds: [],
+    problems: [],
+    stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
+    ...overrides,
+  };
+}
+
 function overrideSelectValueToSnapshot(document) {
   const selects = Array.from(document.querySelectorAll('select'));
   for (const sel of selects) {
@@ -593,18 +616,8 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
     label: 'test',
     storageVersion: 2,
   };
-  const snapshot = {
-    version: 2,
-    schemaVersion: 2,
-    storageLevel: 'full',
+  const snapshot = makeEmptySnapshot(listUrl, {
     savedAt,
-    pageLink: listUrl,
-    scanMode: 'list',
-    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
-    scanStartPage: 1,
-    pageQueue: [],
-    deferred: [],
-    inFlightPages: [],
     seenProblemIds: [42],
     problems: [
       {
@@ -618,7 +631,7 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
       },
     ],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
-  };
+  });
   const { ctx, window, document } = buildContext({
     fetchResponse: {
       ok: true,
@@ -1084,15 +1097,7 @@ test('iife-harness: snapshot with deferred/pageQueue/nextSequentialPage exercise
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
   const keys = buildStateKeys(listUrl);
-  const snapshot = {
-    version: 2,
-    schemaVersion: 2,
-    storageLevel: 'full',
-    savedAt: Date.now(),
-    pageLink: listUrl,
-    scanMode: 'list',
-    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
-    scanStartPage: 1,
+  const snapshot = makeEmptySnapshot(listUrl, {
     pageQueue: [3, 5, 7],
     deferred: [
       [4, 1],
@@ -1101,9 +1106,8 @@ test('iife-harness: snapshot with deferred/pageQueue/nextSequentialPage exercise
     inFlightPages: [2],
     seenProblemIds: [1, 2, 3],
     nextSequentialPage: 8,
-    problems: [],
     stats: { solved: 0, tried: 3, unattempted: 0, total: 3, pages: 1 },
-  };
+  });
   const { ctx, window } = buildContext({
     fetchResponse: {
       ok: true,
@@ -1126,22 +1130,11 @@ test('iife-harness: minimal-snapshot restore logs the compact-state notice', asy
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
   const keys = buildStateKeys(listUrl);
-  const snapshot = {
-    version: 2,
-    schemaVersion: 2,
+  const snapshot = makeEmptySnapshot(listUrl, {
     storageLevel: 'minimal',
-    savedAt: Date.now(),
-    pageLink: listUrl,
-    scanMode: 'list',
-    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
-    scanStartPage: 1,
-    pageQueue: [],
-    deferred: [],
-    inFlightPages: [],
-    seenProblemIds: [],
     problems: [{ id: 1, name: 'p1', link: '/1', status: 'tried', userScore: 50, maxScore: 100 }],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
-  };
+  });
   const { ctx, window } = buildContext({
     fetchResponse: {
       ok: true,
@@ -1165,28 +1158,15 @@ test('iife-harness: id-range snapshot restore covers the id-range branch of rest
   const listUrl = 'id-range:https://www.pbinfo.ro:1-1';
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
   const keys = buildStateKeys(listUrl);
-  const snapshot = {
-    version: 2,
-    schemaVersion: 2,
-    storageLevel: 'full',
-    savedAt: Date.now(),
-    pageLink: listUrl,
+  const snapshot = makeEmptySnapshot(listUrl, {
     scanMode: 'id-range',
-    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
-    scanStartPage: 1,
     idRange: {
       startId: 1,
       endId: 1,
       stopAfterMissing: 0,
       scoreBatch: { enabled: false, size: 200 },
     },
-    pageQueue: [],
-    deferred: [],
-    inFlightPages: [],
-    seenProblemIds: [],
-    problems: [],
-    stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
-  };
+  });
   const { ctx, window } = buildContext({
     fetchResponse: {
       ok: false,
@@ -1686,22 +1666,7 @@ test('iife-harness: import invalid JSON → early return with invalid-file log',
 });
 
 test('iife-harness: import with pageLink mismatch + confirm rejects → early return', async () => {
-  const importable = {
-    version: 2,
-    schemaVersion: 2,
-    storageLevel: 'full',
-    savedAt: Date.now(),
-    pageLink: 'https://different.example.com/list',
-    scanMode: 'list',
-    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
-    scanStartPage: 1,
-    pageQueue: [],
-    deferred: [],
-    inFlightPages: [],
-    seenProblemIds: [],
-    problems: [],
-    stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
-  };
+  const importable = makeEmptySnapshot('https://different.example.com/list');
   const { ctx, window, document } = buildContext({
     fetchResponse: {
       ok: true,
@@ -1722,22 +1687,7 @@ test('iife-harness: import with pageLink mismatch + confirm rejects → early re
 });
 
 test('iife-harness: import JSON + quota-throwing storage → import failed branch', async () => {
-  const importable = {
-    version: 2,
-    schemaVersion: 2,
-    storageLevel: 'full',
-    savedAt: Date.now(),
-    pageLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
-    scanMode: 'list',
-    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
-    scanStartPage: 1,
-    pageQueue: [],
-    deferred: [],
-    inFlightPages: [],
-    seenProblemIds: [],
-    problems: [],
-    stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
-  };
+  const importable = makeEmptySnapshot();
   const { ctx, window, document } = buildContext({
     fetchResponse: {
       ok: true,
@@ -1765,24 +1715,12 @@ test('iife-harness: import JSON + quota-throwing storage → import failed branc
 });
 
 test('iife-harness: import JSON flow with a stubbed file triggers saveImportedSnapshot', async () => {
-  const importable = {
-    version: 2,
-    schemaVersion: 2,
-    storageLevel: 'full',
-    savedAt: Date.now(),
-    pageLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
-    scanMode: 'list',
-    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
-    scanStartPage: 1,
-    pageQueue: [],
-    deferred: [],
-    inFlightPages: [],
-    seenProblemIds: [],
+  const importable = makeEmptySnapshot(undefined, {
     problems: [
       { id: 99, name: 'imp', link: '/99', status: 'solved', userScore: 100, maxScore: 100 },
     ],
     stats: { solved: 1, tried: 0, unattempted: 0, total: 1, pages: 1 },
-  };
+  });
   const { ctx, window, document } = buildContext({
     fetchResponse: {
       ok: true,
@@ -1808,22 +1746,7 @@ test('iife-harness: original pre-seeded snapshot triggers restoreFromSavedState'
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
   const keys = buildStateKeys(listUrl);
-  const snapshot = {
-    version: 2,
-    schemaVersion: 2,
-    storageLevel: 'full',
-    savedAt: Date.now(),
-    pageLink: listUrl,
-    scanMode: 'list',
-    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
-    scanStartPage: 1,
-    pageQueue: [],
-    deferred: [],
-    inFlightPages: [],
-    seenProblemIds: [],
-    problems: [],
-    stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
-  };
+  const snapshot = makeEmptySnapshot(listUrl);
   const { ctx, window } = buildContext({
     fetchResponse: {
       ok: true,
