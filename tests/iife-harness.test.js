@@ -2197,6 +2197,56 @@ test('iife-harness: import JSON flow with a stubbed file triggers saveImportedSn
   await dispatchImport(window, document, JSON.stringify(importable));
 });
 
+test('iife-harness: import minimal-level snapshot hits the minimal fallback chain', async () => {
+  const importable = makeEmptySnapshot(undefined, {
+    storageLevel: 'minimal',
+    problems: [
+      { id: 55, name: 'min', link: '/55', status: 'tried', userScore: 25, maxScore: 100 },
+    ],
+    stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
+  });
+  const { ctx, window, document } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  await startAndDrain(ctx, window, 4);
+  await dispatchImport(window, document, JSON.stringify(importable), 'min.json');
+});
+
+test('iife-harness: import progress-level snapshot hits the progress-only chain', async () => {
+  const importable = makeEmptySnapshot(undefined, {
+    storageLevel: 'progress',
+    problems: [],
+    stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
+  });
+  const { ctx, window, document } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  await startAndDrain(ctx, window, 4);
+  await dispatchImport(window, document, JSON.stringify(importable), 'prog.json');
+});
+
 test('iife-harness: original pre-seeded snapshot triggers restoreFromSavedState', async () => {
   // Pre-populate a v2 snapshot for the default list URL. When the scanner
   // starts it will see the stored state and offer to restore, which we
