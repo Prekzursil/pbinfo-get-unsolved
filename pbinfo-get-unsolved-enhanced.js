@@ -766,6 +766,44 @@ function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
   return base + Math.floor((id - base) / size) * size;
 }
 
+function storageGetJson(keys, storage = globalThis.localStorage) {
+  if (!storage) return null;
+  const list = Array.isArray(keys) ? keys : [keys];
+  for (const key of list) {
+    if (!key) continue;
+    try {
+      const parsed = safeJsonParse(storage.getItem(key));
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {
+      /* ignore and try next key */
+    }
+  }
+  return null;
+}
+
+function storageSetJson(key, value, storage = globalThis.localStorage) {
+  if (!key || !storage) return { ok: false, errorType: 'unknown' };
+  try {
+    storage.setItem(key, JSON.stringify(value));
+    return { ok: true, errorType: null };
+  } catch (err) {
+    return { ok: false, errorType: classifyStorageError(err) };
+  }
+}
+
+function storageRemove(keys, storage = globalThis.localStorage) {
+  if (!storage) return;
+  const list = Array.isArray(keys) ? keys : [keys];
+  for (const key of list) {
+    if (!key) continue;
+    try {
+      storage.removeItem(key);
+    } catch {
+      /* best effort — swallow */
+    }
+  }
+}
+
 function serializeFilterState(filterState) {
   const fs = filterState && typeof filterState === 'object' ? filterState : {};
   const statuses =
@@ -853,6 +891,9 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       parseIdRangeScoreValue,
       idRangeBatchStartForId,
       serializeFilterState,
+      storageGetJson,
+      storageSetJson,
+      storageRemove,
     };
   }
 } else {
@@ -871,38 +912,6 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
 
     function makeStateKeys(pageLink, version = STATE_STORAGE_VERSION) {
       return buildStateKeys(pageLink, { namespace: STORAGE_NAMESPACE, version });
-    }
-
-    function storageGetJson(keys) {
-      const list = Array.isArray(keys) ? keys : [keys];
-      for (const key of list) {
-        if (!key) continue;
-        try {
-          const parsed = safeJsonParse(localStorage.getItem(key));
-          if (parsed && typeof parsed === 'object') return parsed;
-        } catch {}
-      }
-      return null;
-    }
-
-    function storageSetJson(key, value) {
-      if (!key) return { ok: false, errorType: 'unknown' };
-      try {
-        localStorage.setItem(key, JSON.stringify(value));
-        return { ok: true, errorType: null };
-      } catch (err) {
-        return { ok: false, errorType: classifyStorageError(err) };
-      }
-    }
-
-    function storageRemove(keys) {
-      const list = Array.isArray(keys) ? keys : [keys];
-      for (const key of list) {
-        if (!key) continue;
-        try {
-          localStorage.removeItem(key);
-        } catch {}
-      }
     }
 
     function loadThemePreference() {

@@ -76,9 +76,11 @@ function buildContext({ modeOverrides = {}, fetchResponse } = {}) {
   window.confirm = () => false;
   window.alert = () => {};
 
-  // Navigator stubs
+  // Navigator stubs (linkedom may or may not expose one; spread-guard with
+  // a non-empty fallback to avoid Sonar S4158).
+  const existingNavigator = window.navigator || { userAgent: 'linkedom' };
   window.navigator = {
-    ...(window.navigator || {}),
+    ...existingNavigator,
     clipboard: { writeText: async () => {} },
     userAgent: 'node-harness/1.0',
   };
@@ -92,7 +94,7 @@ function buildContext({ modeOverrides = {}, fetchResponse } = {}) {
     text: async () => '<html><body>Pagina nu exista.</body></html>',
   };
   window.fetch = async () => response;
-  window.AbortController = global.AbortController;
+  window.AbortController = globalThis.AbortController;
 
   // Config overrides — no-autorun, skip prompts, force list mode.
   window.PBINFO_GET_UNSOLVED_NO_AUTORUN = true;
@@ -119,7 +121,7 @@ function buildContext({ modeOverrides = {}, fetchResponse } = {}) {
     localStorage: window.localStorage,
     module: {},
     require,
-    AbortController: global.AbortController,
+    AbortController: globalThis.AbortController,
     DOMParser: window.DOMParser,
     process: { env: {} },
   });
@@ -133,7 +135,7 @@ test('iife-harness: can load the script under a linkedom window + stubs without 
   const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
   vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
   if (typeof window.pbinfoGetUnsolvedStart !== 'function') {
-    throw new Error('pbinfoGetUnsolvedStart was not defined on window');
+    throw new TypeError('pbinfoGetUnsolvedStart was not defined on window');
   }
 });
 

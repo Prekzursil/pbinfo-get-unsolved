@@ -168,7 +168,7 @@ test('computeBackoffWithJitter: clamps NaN random to safe default', () => {
     baseMs: 100,
     capMs: 1000,
     jitter: true,
-    random: () => NaN,
+    random: () => Number.NaN,
   });
   assert.ok(Number.isFinite(v));
   assert.ok(v >= 0);

@@ -2,7 +2,7 @@
 
 // Cross-browser reference: Firefox still exposes `browser.*`, Chrome uses `chrome.*`.
 // Both conform to the MV3 events we need. We normalize once and proceed.
-const api = typeof globalThis.browser === 'undefined' ? globalThis.chrome : globalThis.browser;
+const api = globalThis.browser === undefined ? globalThis.chrome : globalThis.browser;
 
 api.runtime.onInstalled.addListener(({ reason }) => {
   console.info('[pbinfo-get-unsolved] installed/upgraded:', reason);

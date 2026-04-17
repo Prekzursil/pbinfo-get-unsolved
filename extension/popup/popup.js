@@ -1,6 +1,6 @@
 'use strict';
 
-const api = typeof globalThis.browser === 'undefined' ? globalThis.chrome : globalThis.browser;
+const api = globalThis.browser === undefined ? globalThis.chrome : globalThis.browser;
 
 const startBtn = document.getElementById('start');
 const statusEl = document.getElementById('status');
