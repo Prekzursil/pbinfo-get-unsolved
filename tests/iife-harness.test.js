@@ -28,6 +28,15 @@ function loadLibraryInto(ctx) {
   vm.runInContext(LIBRARY_SOURCE, ctx, { filename: LIBRARY_PATH }); // NOSONAR: javascript:S1523 — executing our own pinned library source (read once at module load) in an isolated vm context for branch-coverage purposes; never evaluates user input.
 }
 
+// Installs a clipboard-throwing navigator inside the vm context. The writeText
+// factory must be a no-argument function returning an async function so we
+// only have to pass it once; the NOSONAR sits on the single helper rather
+// than every call site.
+function installThrowingClipboard(ctx, writeTextFactory) {
+  const snippet = `globalThis.navigator = { clipboard: { writeText: ${writeTextFactory.toString()} }, userAgent: 'test' };`;
+  vm.runInContext(snippet, ctx); // NOSONAR: javascript:S1523 — evaluating a harness-controlled literal built from a local factory; never evaluates user input.
+}
+
 async function drainMicrotasks(ticks = 8) {
   for (let i = 0; i < ticks; i++) {
     await new Promise((r) => setImmediate(r));
@@ -837,10 +846,9 @@ test('iife-harness: copyTextToClipboard fallback branches via clipboard-throws +
   // clipboard API throws, execCommand returns true — covers the
   // execCommand-success branch of copyTextToClipboard. Apply the mutation
   // inside the vm so the bare `navigator` binding sees it.
-  vm.runInContext(
-    "globalThis.navigator = { clipboard: { writeText: async () => { throw new Error('denied'); } }, userAgent: 'test' };",
-    ctx
-  );
+  installThrowingClipboard(ctx, async () => {
+    throw new Error('denied');
+  });
   Object.defineProperty(document, 'execCommand', { value: () => true, configurable: true });
   await startAndDrain(ctx, window, 4);
   // Click every button so copyLinks/copyIds/copyMarkdown fire.
@@ -877,10 +885,11 @@ test('iife-harness: copyTextToClipboard fully-failed fallback → describeClipbo
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
   window.confirm = () => true;
   ctx.confirm = window.confirm;
-  vm.runInContext(
-    "globalThis.navigator = { clipboard: { writeText: async () => { const e = new Error('denied'); e.name = 'NotAllowedError'; throw e; } }, userAgent: 'test' };",
-    ctx
-  );
+  installThrowingClipboard(ctx, async () => {
+    const e = new Error('denied');
+    e.name = 'NotAllowedError';
+    throw e;
+  });
   Object.defineProperty(document, 'execCommand', { value: () => false, configurable: true });
   await startAndDrain(ctx, window, 4);
   const buttons = Array.from(document.querySelectorAll('button'));
