@@ -769,6 +769,32 @@ function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
   return base + Math.floor((id - base) / size) * size;
 }
 
+function numberToDifficulty(n) {
+  if (n === 0) return 'ușoară';
+  if (n === 1) return 'medie';
+  if (n === 2) return 'dificilă';
+  return 'concurs';
+}
+
+function difficultyColor(n) {
+  if (n === 0) return '5cb85c';
+  if (n === 1) return 'f0ad4e';
+  if (n === 2) return '5bc0de';
+  return 'd9534f';
+}
+
+function statusLabel(s) {
+  if (s === 'solved') return 'rezolvată';
+  if (s === 'tried') return 'încercată';
+  return 'neîncercată';
+}
+
+function statusColor(s) {
+  if (s === 'solved') return '5cb85c';
+  if (s === 'tried') return 'f0ad4e';
+  return '6c757d';
+}
+
 function sanitizeForDebugLog(value, maxLength = 200) {
   if (value == null) return '';
   const text = typeof value === 'string' ? value : String(value);
@@ -934,6 +960,10 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       storageRemove,
       projectSnapshotForLevel,
       sanitizeForDebugLog,
+      numberToDifficulty,
+      difficultyColor,
+      statusLabel,
+      statusColor,
     };
   }
 } else {
@@ -2437,23 +2467,6 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
         if (sorted[t] === -1) return '&#9650;';
         return '&#9654;';
       }
-      function numberToDifficulty(n) {
-        return n === 0 ? 'ușoară' : n === 1 ? 'medie' : n === 2 ? 'dificilă' : 'concurs';
-      }
-      function difficultyColor(n) {
-        return n === 0 ? '5cb85c' : n === 1 ? 'f0ad4e' : n === 2 ? '5bc0de' : 'd9534f';
-      }
-      function statusLabel(s) {
-        if (s === 'solved') return 'rezolvată';
-        if (s === 'tried') return 'încercată';
-        return 'neîncercată';
-      }
-      function statusColor(s) {
-        if (s === 'solved') return '5cb85c';
-        if (s === 'tried') return 'f0ad4e';
-        return '6c757d';
-      }
-
       const renderToken = ++tableRenderToken;
       table.replaceChildren();
       const thead = document.createElement('thead');
