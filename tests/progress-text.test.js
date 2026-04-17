@@ -113,3 +113,26 @@ test('formatProgressText: list mode with totalProblems but no pageSize hits else
   });
   assert.ok(out.includes('probleme 7/50'));
 });
+
+test('formatProgressText: non-finite stats.pages / stats.total default to 0', () => {
+  const out = formatProgressText({
+    scanMode: 'list',
+    stats: { pages: 'nope', total: null },
+    elapsedMs: 1000,
+  });
+  // The "0" defaults kick in for both counters.
+  assert.ok(out.includes('pagini 0'));
+  assert.ok(out.includes('probleme 0'));
+});
+
+test('formatProgressText: id-range fallback keeps done count when endId not finite', () => {
+  const out = formatProgressText({
+    scanMode: 'id-range',
+    stats: { pages: 2, total: 1, missing: 0, forbidden: 0 },
+    config: { idRange: { endId: 'no' } },
+    scanStart: 1,
+    elapsedMs: 1000,
+  });
+  assert.ok(out.includes('ID-uri 2'));
+  assert.ok(!out.includes('2/'));
+});
