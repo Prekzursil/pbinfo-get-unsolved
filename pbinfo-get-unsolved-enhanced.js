@@ -3262,11 +3262,10 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       if (!migrated || migrated.pageLink !== pageLink) return false;
       restoringState = true;
       try {
-        for (const xhr of activeRequests) {
-          try {
-            xhr.abort();
-          } catch {}
-        }
+        // Clear any in-flight request bookkeeping — the load button guard
+        // already blocks restore while inFlight > 0, so activeRequests is
+        // always empty here under current control flow. The clear() calls
+        // are cheap defensive hygiene.
         activeRequests.clear();
         activePageIndexes.clear();
         inFlight = 0;
