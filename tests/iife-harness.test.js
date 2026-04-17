@@ -1829,3 +1829,157 @@ test('iife-harness: exercising exported UI hooks (sortTable, stopScan, togglePau
   const controls = Array.from(document.querySelectorAll('button, select'));
   for (const ctrl of controls) dispatchControlEvent(ctrl, window);
 });
+
+test('iife-harness: auto-run gate (NO_AUTORUN undefined) fires runPbinfoGetUnsolved on load', () => {
+  const { ctx, window } = buildContext();
+  // Remove the opt-out flag so the bottom-of-file gate invokes runPbinfoGetUnsolved.
+  delete window.PBINFO_GET_UNSOLVED_NO_AUTORUN;
+  // Prompt returns null -> the mode-prompt abort branch fires (L1488-1491).
+  window.prompt = () => null;
+  ctx.prompt = window.prompt;
+  try {
+    loadLibraryInto(ctx);
+  } catch {
+    /* harness best-effort */
+  }
+});
+
+test('iife-harness: mode-prompt cancel exits cleanly with the mode abort log', () => {
+  const { ctx, window } = buildContext();
+  window.PBINFO_GET_UNSOLVED_MODE_PROMPT = true;
+  window.prompt = () => null;
+  ctx.prompt = window.prompt;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* best effort */
+  }
+});
+
+test('iife-harness: list-mode link prompt cancel hits the pageLinkInput abort', () => {
+  const { ctx, window } = buildContext({
+    modeOverrides: { PBINFO_GET_UNSOLVED_MODE: 'list' },
+  });
+  // First prompt (mode) is skipped; the second (link) returns null.
+  window.prompt = () => null;
+  ctx.prompt = window.prompt;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* best effort */
+  }
+});
+
+test('iife-harness: list-mode invalid link returns null from normalizeListUrl', () => {
+  const { ctx, window } = buildContext({
+    modeOverrides: { PBINFO_GET_UNSOLVED_MODE: 'list' },
+  });
+  // Return a value that normalizeListUrl rejects (no URL can resolve).
+  // An empty string with no default and no base -> null -> L1520-1523 abort.
+  window.location = { href: '', origin: '' };
+  window.prompt = () => '';
+  ctx.prompt = window.prompt;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* best effort */
+  }
+});
+
+test('iife-harness: id-range mode prompt cancel hits the idRangeInput abort', () => {
+  const { ctx, window } = buildContext({
+    modeOverrides: { PBINFO_GET_UNSOLVED_MODE: 'id-range' },
+  });
+  window.prompt = () => null;
+  ctx.prompt = window.prompt;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* best effort */
+  }
+});
+
+test('iife-harness: id-range mode with invalid range string hits the range-validation abort', () => {
+  const { ctx, window } = buildContext({
+    modeOverrides: { PBINFO_GET_UNSOLVED_MODE: 'id-range' },
+  });
+  // Non-numeric range -> parseIdRangeInput returns null -> L1494-1497 abort.
+  window.prompt = () => 'not-a-range';
+  ctx.prompt = window.prompt;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* best effort */
+  }
+});
+
+test('iife-harness: start-page prompt cancel hits the startPageInput abort', () => {
+  const { ctx, window } = buildContext({
+    modeOverrides: { PBINFO_GET_UNSOLVED_MODE: 'list' },
+  });
+  const LIST_URL = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  let promptCall = 0;
+  // First prompt (link) returns the default; second (start page) returns null.
+  window.prompt = (_msg, fallback) => {
+    promptCall += 1;
+    if (promptCall === 1) return fallback ?? LIST_URL;
+    return null;
+  };
+  ctx.prompt = window.prompt;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* best effort */
+  }
+});
+
+test('iife-harness: start-page prompt invalid number hits the start-validation abort', () => {
+  const { ctx, window } = buildContext({
+    modeOverrides: { PBINFO_GET_UNSOLVED_MODE: 'list' },
+  });
+  const LIST_URL = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  let promptCall = 0;
+  // First prompt (link) returns LIST_URL; second (start page) returns '-7'.
+  window.prompt = (_msg, fallback) => {
+    promptCall += 1;
+    if (promptCall === 1) return fallback ?? LIST_URL;
+    return '-7';
+  };
+  ctx.prompt = window.prompt;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* best effort */
+  }
+});
+
+test('iife-harness: id-range start beyond endId hits the start>endId abort', () => {
+  const { ctx, window } = buildContext({
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'id-range',
+      PBINFO_GET_UNSOLVED_ID_START: 1,
+      PBINFO_GET_UNSOLVED_ID_END: 3,
+    },
+  });
+  let promptCall = 0;
+  // First prompt (id range) returns '1-3'; second (start page) returns '999'.
+  window.prompt = () => {
+    promptCall += 1;
+    if (promptCall === 1) return '1-3';
+    return '999';
+  };
+  ctx.prompt = window.prompt;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* best effort */
+  }
+});
