@@ -780,14 +780,7 @@ test('iife-harness: 200-problem restored snapshot triggers scheduleChunk + clear
   // Click every button — the state select is left at its default value
   // (empty / autosave sentinel), so clearStateBtn falls through to
   // clearSavedStateForLink instead of deleteSnapshotItem.
-  const buttons = Array.from(document.querySelectorAll('button'));
-  for (const btn of buttons) {
-    try {
-      btn.dispatchEvent(new window.Event('click', { bubbles: true }));
-    } catch {
-      /* best effort */
-    }
-  }
+  clickAllButtons(window, document);
   for (let i = 0; i < 6; i++) {
     await new Promise((r) => setImmediate(r));
   }
@@ -1530,14 +1523,7 @@ test('iife-harness: filter inputs + quota-throwing storage trigger requestRender
   }
   // Click save + clear state buttons with the autosave (no snapshot)
   // selection so clearSavedStateForLink is reached.
-  const buttons = Array.from(document.querySelectorAll('button'));
-  for (const btn of buttons) {
-    try {
-      btn.dispatchEvent(new window.Event('click', { bubbles: true }));
-    } catch {
-      /* best effort */
-    }
-  }
+  clickAllButtons(window, document);
   for (let i = 0; i < 4; i++) {
     await new Promise((r) => setImmediate(r));
   }
