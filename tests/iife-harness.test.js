@@ -1960,6 +1960,59 @@ test('iife-harness: start-page prompt invalid number hits the start-validation a
   }
 });
 
+test('iife-harness: list scan with rich card (name anchor + difficulty + posted-by) exercises all card branches', async () => {
+  const body = `<!doctype html><html><body>
+    <div class="row">
+      <div class="card mb-3">
+        <div class="card-header"><code>#42</code></div>
+        <h5 class="card-title"><a href="/probleme/42/graful-gigel">Graful Gigel</a></h5>
+        <span title="Dificultate">Medie</span>
+        <span title="Postată de"><a href="/profil/autor">Autor</a></span>
+        <div class="card-footer">
+          <span class="badge" title="Punctaj obtinut">50/100</span>
+        </div>
+      </div>
+      <div class="card mb-3">
+        <div class="card-header"><code>#43</code></div>
+        <h5 class="card-title"><a href="/probleme/43/demo-u">Demo Ușor</a></h5>
+        <span title="Dificultate">Ușoară</span>
+      </div>
+      <div class="card mb-3">
+        <div class="card-header"><code>#44</code></div>
+        <h5 class="card-title"><a href="/probleme/44/demo-d">Demo Dificil</a></h5>
+        <span title="Dificultate">Dificilă</span>
+      </div>
+      <div class="card mb-3">
+        <div class="card-header"><code>#45</code></div>
+        <h5 class="card-title"><a href="/probleme/45/demo-x">Demo Neclasificat</a></h5>
+        <span title="Dificultate">Altceva necunoscut</span>
+      </div>
+    </div>
+    <p>Pagina nu exista.</p>
+  </body></html>`;
+  let fetchCount = 0;
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_PAGE_SIZE: 10,
+    },
+  });
+  window.fetch = () => {
+    fetchCount += 1;
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      text: async () => (fetchCount === 1 ? body : '<body>Pagina nu exista.</body>'),
+    });
+  };
+  ctx.fetch = window.fetch;
+  await startAndDrain(ctx, window, 8);
+});
+
 test('iife-harness: id-range start beyond endId hits the start>endId abort', () => {
   const { ctx, window } = buildContext({
     modeOverrides: {
