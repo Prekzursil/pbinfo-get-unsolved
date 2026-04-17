@@ -57,6 +57,15 @@ async function startAndDrain(ctx, window, ticks = 8) {
   await drainMicrotasks(ticks);
 }
 
+// Common modeOverrides for "scan one page and stop" scenarios. Fifty-plus
+// tests previously repeated these three flags; using the constant makes
+// Sonar/qlty's duplication detector ignore them.
+const SHORT_SCAN_OVERRIDES = {
+  PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+  PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+  PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+};
+
 // Boilerplate for restore-from-snapshot tests: seed keys.full with `snap`,
 // set window.confirm=true, and route the first prompt to listUrl so the
 // IIFE's pageLink matches the key hash. Returns the same { ctx, window }.
@@ -448,9 +457,7 @@ test('iife-harness: restore prompt uses problems.length when stats.total missing
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   seedSnapshotRestore({ ctx, window, listUrl, snap: snap });
@@ -465,9 +472,7 @@ test('iife-harness: iframe setup throws → default-console fallback catch fires
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   // Override createElement to throw for iframe tag → L1303-1304 catch fires.
@@ -496,9 +501,7 @@ test('iife-harness: console.clear throwing hits the outer iframe-console catch',
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   // Throwing console.clear hits the second try/catch at L1306-1309.
@@ -529,9 +532,7 @@ test('iife-harness: debug mode with DEBUG_HTML logs the card outerHTML', async (
   const { ctx, window } = buildContext({
     fetchResponse: null,
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
       PBINFO_GET_UNSOLVED_DEBUG: true,
       PBINFO_GET_UNSOLVED_DEBUG_HTML: true,
     },
@@ -561,9 +562,7 @@ test('iife-harness: list debug scan with unattempted card hits debugDumpCard wit
   const { ctx, window } = buildContext({
     fetchResponse: null,
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
       PBINFO_GET_UNSOLVED_DEBUG: true,
       PBINFO_GET_UNSOLVED_DEBUG_DUMP_LIMIT: 5,
       PBINFO_GET_UNSOLVED_DEBUG_INCLUDE_HTML: false,
@@ -627,9 +626,7 @@ test('iife-harness: list scan with MAX_PAGES < total hits the cap warning', asyn
   const { ctx, window } = buildContext({
     fetchResponse: null,
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
       PBINFO_GET_UNSOLVED_PAGE_SIZE: 10,
     },
   });
@@ -662,9 +659,7 @@ test('iife-harness: list scan with debug enabled exercises debugDumpCard on pars
   const { ctx, window } = buildContext({
     fetchResponse: null,
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
       PBINFO_GET_UNSOLVED_DEBUG: true,
       PBINFO_GET_UNSOLVED_DEBUG_DUMP_LIMIT: 5,
       PBINFO_GET_UNSOLVED_DEBUG_INCLUDE_HTML: false,
@@ -822,9 +817,7 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
@@ -881,9 +874,7 @@ test('iife-harness: stop scan during hanging fetch triggers AbortError path', as
   const { ctx, window } = buildContext({
     fetchResponse: null,
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   // Fetch that respects signal.abort — resolves with AbortError when controller
@@ -941,9 +932,7 @@ test('iife-harness: copy handlers with clipboard-api success hit the method=clip
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   seedSnapshotRestore({ ctx, window, listUrl, snap: snapshot });
@@ -996,9 +985,7 @@ test('iife-harness: copy handlers with execCommand-success fallback hit the meth
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   seedSnapshotRestore({ ctx, window, listUrl, snap: snapshot });
@@ -1049,9 +1036,7 @@ test('iife-harness: deleteSnapshotItem with throwing index write hits failure lo
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   win.localStorage.setItem(keys.index, JSON.stringify([indexItem]));
@@ -1120,9 +1105,7 @@ test('iife-harness: pruneSnapshotIndex evicts past max=8 snapshots on save', asy
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   window.localStorage.setItem(keys.index, JSON.stringify(indexItems));
@@ -1189,9 +1172,7 @@ test('iife-harness: loadStateBtn autosave path via in-vm pause+load click', asyn
     // is NOT a no-op -> paused becomes true -> loadStateBtn guard passes.
     fetchResponse: null,
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   window.fetch = () => new Promise(() => {}); // never resolves
@@ -1276,9 +1257,7 @@ test('iife-harness: loadStateBtn snapshot: branch via override + in-vm pause+loa
   const { ctx, window, document } = buildContext({
     fetchResponse: null,
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   // Hanging fetch so inFlight never drains but the scan is not finished
@@ -1336,9 +1315,7 @@ test('iife-harness: loadStateBtn snapshot: branch with missing item returns "ine
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   // Seed only the index, NOT the snapshot-item blob -> loadSnapshotItem
@@ -1381,9 +1358,7 @@ test('iife-harness: loadStateBtn with no saved state hits the no-snapshot log', 
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   window.confirm = () => true;
@@ -1409,9 +1384,7 @@ test('iife-harness: overlay=true + closeOverlay exercise the overlay teardown br
     fetchResponse: null,
     modeOverrides: {
       PBINFO_GET_UNSOLVED_OVERLAY: true,
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   // Hanging fetch so scan is not finished when we click "Închide overlay" —
@@ -1531,9 +1504,7 @@ test('iife-harness: 200-problem restored snapshot triggers scheduleChunk + clear
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
       PBINFO_GET_UNSOLVED_RENDER_CHUNK_SIZE: 50,
     },
   });
@@ -1634,9 +1605,7 @@ test('iife-harness: virtualize rows + 200-problem snapshot displays the virtuali
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
       PBINFO_GET_UNSOLVED_VIRTUALIZE_ROWS: true,
       PBINFO_GET_UNSOLVED_VIRTUAL_ROWS_LIMIT: 150,
       PBINFO_GET_UNSOLVED_RENDER_CHUNK_SIZE: 200,
@@ -1669,9 +1638,7 @@ test('iife-harness: pause then resume re-schedules kicks via togglePause !paused
   const { ctx, window } = buildContext({
     fetchResponse: null,
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   // Hanging fetch so scan stays running (not finished / not stopped) and
@@ -1716,9 +1683,7 @@ test('iife-harness: restore with filter.scoreMin/Max seeds input.value at setupC
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   seedSnapshotRestore({ ctx, window, listUrl, snap: snap });
@@ -1749,9 +1714,7 @@ test('iife-harness: restore snapshot with resumeFromPage fallback + empty filter
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   seedSnapshotRestore({ ctx, window, listUrl, snap: snap });
@@ -1774,9 +1737,7 @@ test('iife-harness: autosave-enabled scan updates lastAutosaveAt + lastAutosaveP
   const { ctx, window } = buildContext({
     fetchResponse: null,
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
       PBINFO_GET_UNSOLVED_PAGE_SIZE: 10,
       // Lower the everyPages threshold so 1 page is enough to trigger save.
       PBINFO_GET_UNSOLVED_AUTOSAVE_EVERY_PAGES: 1,
@@ -1808,9 +1769,7 @@ test('iife-harness: legacy v1 snapshot index merges with v2 via loadSnapshotInde
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   // Seed a legacy-v1 index item so loadSnapshotIndexForLink reads
@@ -1867,9 +1826,7 @@ test('iife-harness: restore from snapshot with only config.startPage hits the el
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   seedSnapshotRestore({ ctx, window, listUrl, snap: snap });
@@ -1889,9 +1846,7 @@ test('iife-harness: clicking a table-header anchor calls sortTable via preventDe
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   seedSnapshotRestore({ ctx, window, listUrl, snap: snap });
@@ -1922,9 +1877,7 @@ test('iife-harness: small chunk + 200-problem snapshot triggers scheduleChunk re
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
       // Small chunk + no virtualization -> renderChunk reschedules 4+ times
       // via rAF to render the full 200-row list (covers L2860 scheduleChunk
       // + the inner idx<list.length return L2861).
@@ -1985,9 +1938,7 @@ test('iife-harness: copyTextToClipboard fallback branches via clipboard-throws +
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
@@ -2027,9 +1978,7 @@ test('iife-harness: copyTextToClipboard fully-failed fallback → describeClipbo
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
@@ -2115,9 +2064,7 @@ test('iife-harness: list scan with LIVE_RENDER=true + fully-decorated card exerc
   const { ctx, window } = buildContext({
     fetchResponse: null,
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
       PBINFO_GET_UNSOLVED_LIVE_RENDER: true,
       PBINFO_GET_UNSOLVED_LIVE_RENDER_EVERY_PAGES: 1,
       PBINFO_GET_UNSOLVED_LIVE_RENDER_MIN_MS: 0,
@@ -2157,9 +2104,7 @@ test('iife-harness: snapshot with deferred/pageQueue/nextSequentialPage exercise
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
@@ -2187,9 +2132,7 @@ test('iife-harness: minimal-snapshot restore logs the compact-state notice', asy
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   // Seed under minimal key so restore picks it as 'minimal' kind.
@@ -2241,9 +2184,7 @@ test('iife-harness: list-mode status 500 response + no retries → finishScan er
       text: async () => 'Internal Server Error',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   await startAndDrain(ctx, window, 6);
@@ -2332,9 +2273,7 @@ test('iife-harness: list-mode "invalid request" body → dedicated Invalid reque
       text: async () => '<body>Invalid request</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   await startAndDrain(ctx, window, 6);
@@ -2570,9 +2509,7 @@ test('iife-harness: no-requestAnimationFrame path exercises scheduleChunk setTim
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
       PBINFO_GET_UNSOLVED_RENDER_CHUNK_SIZE: 50,
     },
   });
@@ -2610,9 +2547,7 @@ test('iife-harness: list scan with quota-throwing storage + autosave every=1 dis
   const { ctx, window } = buildContext({
     fetchResponse: null,
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
       PBINFO_GET_UNSOLVED_AUTOSAVE: true,
       PBINFO_GET_UNSOLVED_AUTOSAVE_MS: 5000,
       PBINFO_GET_UNSOLVED_AUTOSAVE_PAGES: 1,
@@ -2644,9 +2579,7 @@ test('iife-harness: filter inputs + quota-throwing storage trigger requestRender
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
       PBINFO_GET_UNSOLVED_AUTOSAVE: true,
       PBINFO_GET_UNSOLVED_AUTOSAVE_MS: 1,
       PBINFO_GET_UNSOLVED_AUTOSAVE_PAGES: 1,
@@ -2701,9 +2634,7 @@ test('iife-harness: import invalid JSON → early return with invalid-file log',
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   await startAndDrain(ctx, window, 4);
@@ -2718,9 +2649,7 @@ test('iife-harness: import with file.text() throwing hits the catch branch', asy
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   await startAndDrain(ctx, window, 4);
@@ -2736,9 +2665,7 @@ test('iife-harness: import with pageLink mismatch + confirm rejects → early re
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   // confirm returns false → user declines the remap → import exits early.
@@ -2757,9 +2684,7 @@ test('iife-harness: import JSON + quota-throwing storage → import failed branc
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   // Storage setItem always throws so saveImportedSnapshot fails for every
@@ -2790,9 +2715,7 @@ test('iife-harness: import JSON flow with a stubbed file triggers saveImportedSn
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   window.confirm = () => true;
@@ -2819,9 +2742,7 @@ test('iife-harness: restore minimal-only saved state hits kind=minimal note log'
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   window.localStorage.setItem(keys.minimal, JSON.stringify(snap));
@@ -2855,9 +2776,7 @@ test('iife-harness: restore progress-level saved state hits kind=minimal+progres
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   window.localStorage.setItem(keys.minimal, JSON.stringify(snap));
@@ -2885,9 +2804,7 @@ test('iife-harness: import with storage.setItem throwing on index writes logs sa
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   // Wrap setItem so writes to state-index:* keys throw QuotaExceededError.
@@ -2921,9 +2838,7 @@ test('iife-harness: import minimal-level snapshot hits the minimal fallback chai
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   window.confirm = () => true;
@@ -2945,9 +2860,7 @@ test('iife-harness: import progress-level snapshot hits the progress-only chain'
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   window.confirm = () => true;
@@ -2971,9 +2884,7 @@ test('iife-harness: original pre-seeded snapshot triggers restoreFromSavedState'
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {
-      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      ...SHORT_SCAN_OVERRIDES,
     },
   });
   // Seed the snapshot under the "full" key and accept the restore prompt.
