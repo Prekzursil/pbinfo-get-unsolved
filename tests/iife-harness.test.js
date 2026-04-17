@@ -1355,6 +1355,22 @@ test('iife-harness: id-range 403 with batch-populated score hits the knownIdRang
   await startAndDrain(ctx, window, 12);
 });
 
+test('iife-harness: fetch network error with retries available hits the retry-with-delay addLog', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  // Reject with a non-abort error so the catch() runs the network-error
+  // branch.
+  window.fetch = () => Promise.reject(new Error('ECONNREFUSED'));
+  ctx.fetch = window.fetch;
+  await startAndDrain(ctx, window, 8);
+});
+
 test('iife-harness: id-range with delay=0 + concurrency=2 hits the aggressive-scan warning', async () => {
   const { ctx, window } = buildContext({
     fetchResponse: {
