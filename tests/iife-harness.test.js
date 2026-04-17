@@ -659,6 +659,103 @@ test('iife-harness: 200-problem restored snapshot triggers scheduleChunk + clear
   }
 });
 
+test('iife-harness: list scan with LIVE_RENDER=true + problem cards exercises maybeLiveRender', async () => {
+  const body = `<!doctype html><html><body>
+    <div class="row">
+      <div class="card mb-3">
+        <code>#1</code>
+        <a href="/probleme/1/test" class="text-dark"><h5>#1 test</h5></a>
+        <div class="card-footer"><span class="badge" title="Punctaj obtinut">50</span></div>
+      </div>
+    </div>
+  </body></html>`;
+  let n = 0;
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_LIVE_RENDER: true,
+      PBINFO_GET_UNSOLVED_LIVE_RENDER_EVERY_PAGES: 1,
+      PBINFO_GET_UNSOLVED_LIVE_RENDER_MIN_MS: 0,
+    },
+  });
+  window.fetch = () => {
+    n += 1;
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      text: async () => (n === 1 ? body : '<body>Pagina nu exista.</body>'),
+    });
+  };
+  ctx.fetch = window.fetch;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 8; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
+test('iife-harness: id-range snapshot restore covers the id-range branch of restoreFromSavedState', async () => {
+  const listUrl = 'id-range:https://www.pbinfo.ro:1-1';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const snapshot = {
+    version: 2,
+    schemaVersion: 2,
+    storageLevel: 'full',
+    savedAt: Date.now(),
+    pageLink: listUrl,
+    scanMode: 'id-range',
+    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
+    scanStartPage: 1,
+    idRange: {
+      startId: 1,
+      endId: 1,
+      stopAfterMissing: 0,
+      scoreBatch: { enabled: false, size: 200 },
+    },
+    pageQueue: [],
+    deferred: [],
+    inFlightPages: [],
+    seenProblemIds: [],
+    problems: [],
+    stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
+  };
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: false,
+      status: 404,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'id-range',
+      PBINFO_GET_UNSOLVED_ID_START: 1,
+      PBINFO_GET_UNSOLVED_ID_END: 1,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: false,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 8; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
 test('iife-harness: list-mode status 500 response + no retries → finishScan error branch', async () => {
   const { ctx, window } = buildContext({
     fetchResponse: {
