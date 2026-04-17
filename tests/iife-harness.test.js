@@ -316,12 +316,16 @@ test('iife-harness: list scan against a "not found" body runs the response pipel
 });
 
 test('iife-harness: list debug scan with unattempted card hits debugDumpCard with candidates', async () => {
+  // Max-points-only tooltip: produces a candidates array with a single
+  // max-hint entry, but the scoreInfo resolves to userScore=null so the
+  // status stays 'unattempted' → debugDumpCard runs WITH candidates, so the
+  // candidates.map(...) body (L1686-1691) executes.
   const body = `<!doctype html><html><body>
     <div class="row">
       <div class="card mb-3">
         <code>#1</code>
         <a href="/probleme/1/unattempted" class="text-dark"><h5>#1 unattempted</h5></a>
-        <!-- no score badge → unattempted status, but id IS parseable -->
+        <span class="badge" title="Punctaj maxim">100p</span>
       </div>
     </div>
     <p>Pagina nu exista.</p>
