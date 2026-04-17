@@ -766,6 +766,29 @@ function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
   return base + Math.floor((id - base) / size) * size;
 }
 
+function projectSnapshotForLevel(snapshot, level, { pageLink, schemaVersion = 2 } = {}) {
+  const migrated = migrateStateSnapshotToV2(snapshot);
+  if (!migrated) return null;
+  const projectedLevel =
+    level === 'full' || level === 'minimal' || level === 'progress' ? level : 'minimal';
+  const out = {
+    ...migrated,
+    version: schemaVersion,
+    schemaVersion,
+    storageLevel: projectedLevel,
+    pageLink: pageLink ?? migrated.pageLink,
+  };
+  if (projectedLevel === 'progress') {
+    delete out.problems;
+  } else {
+    const inputProblems = Array.isArray(migrated.problems) ? migrated.problems : [];
+    out.problems = inputProblems.map((p) => serializeProblemForSnapshot(p, projectedLevel));
+  }
+  if (!Array.isArray(out.seenProblemIds)) out.seenProblemIds = [];
+  out.resumeFromPage = computeResumeFromStateSnapshot(out);
+  return out;
+}
+
 function storageGetJson(keys, storage = globalThis.localStorage) {
   if (!storage) return null;
   const list = Array.isArray(keys) ? keys : [keys];
@@ -894,6 +917,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       storageGetJson,
       storageSetJson,
       storageRemove,
+      projectSnapshotForLevel,
     };
   }
 } else {
@@ -2797,27 +2821,11 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       return { ok: false, id: null, storageLevel: null };
     }
 
-    function projectSnapshotForLevel(snapshot, level) {
-      const migrated = migrateStateSnapshotToV2(snapshot);
-      if (!migrated) return null;
-      const projectedLevel =
-        level === 'full' || level === 'minimal' || level === 'progress' ? level : 'minimal';
-      const out = {
-        ...migrated,
-        version: STATE_STORAGE_VERSION,
-        schemaVersion: STATE_STORAGE_VERSION,
-        storageLevel: projectedLevel,
+    function projectSnapshotForLevelLocal(snapshot, level) {
+      return projectSnapshotForLevel(snapshot, level, {
         pageLink,
-      };
-      if (projectedLevel === 'progress') {
-        delete out.problems;
-      } else {
-        const inputProblems = Array.isArray(migrated.problems) ? migrated.problems : [];
-        out.problems = inputProblems.map((p) => serializeProblemForSnapshot(p, projectedLevel));
-      }
-      if (!Array.isArray(out.seenProblemIds)) out.seenProblemIds = [];
-      out.resumeFromPage = computeResumeFromStateSnapshot(out);
-      return out;
+        schemaVersion: STATE_STORAGE_VERSION,
+      });
     }
 
     function saveImportedSnapshot(snapshot, { label } = {}) {
@@ -2840,7 +2848,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
             ? ['minimal', 'progress']
             : ['progress'];
       for (const level of levels) {
-        const snap = projectSnapshotForLevel(migrated, level);
+        const snap = projectSnapshotForLevelLocal(migrated, level);
         if (!snap) continue;
         snap.savedAt = Date.now();
         if (label) snap.label = String(label);
