@@ -362,8 +362,9 @@ function computeBackoffWithJitter(
   const cap = Number.isFinite(capMs) ? Math.max(base, Math.trunc(capMs)) : Math.max(base, 15000);
   const exp = Math.min(cap, base * 2 ** n);
   if (!jitter) return exp;
-  const rnd = typeof random === 'function' ? Number(random()) : Math.random();
-  const boundedRnd = Number.isFinite(rnd) ? Math.min(1, Math.max(0, rnd)) : Math.random();
+  // Sonar S2245 accepted: jitter for retry backoff, not cryptographic.
+  const rnd = typeof random === 'function' ? Number(random()) : Math.random(); // NOSONAR: javascript:S2245 — jitter for retry backoff, not cryptographic.
+  const boundedRnd = Number.isFinite(rnd) ? Math.min(1, Math.max(0, rnd)) : Math.random(); // NOSONAR: javascript:S2245 — fallback jitter for retry backoff.
   return Math.max(0, Math.trunc(boundedRnd * exp));
 }
 
@@ -3091,7 +3092,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
     }
 
     function saveSnapshotItem({ mode, label, reason } = {}) {
-      const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`; // NOSONAR: javascript:S2245 — snapshot id uniqueness, not cryptographic.
       const key = snapshotItemKey(id, STATE_STORAGE_VERSION);
       if (!key) return { ok: false, id: null, storageLevel: null };
 
@@ -3140,7 +3141,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
     function saveImportedSnapshot(snapshot, { label } = {}) {
       const migrated = migrateStateSnapshotToV2(snapshot);
       if (!migrated) return { ok: false, id: null, storageLevel: null };
-      const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`; // NOSONAR: javascript:S2245 — snapshot id uniqueness, not cryptographic.
       const key = snapshotItemKey(id, STATE_STORAGE_VERSION);
       if (!key) return { ok: false, id: null, storageLevel: null };
 
