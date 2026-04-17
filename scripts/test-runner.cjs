@@ -19,7 +19,11 @@ const IGNORED_ARGS = new Set(['--coverage', '--watch=false', '--watch', '--no-wa
 const rawArgs = process.argv.slice(2);
 const forwarded = rawArgs.filter((arg) => !IGNORED_ARGS.has(arg));
 
-const result = spawnSync('node', ['--test', ...forwarded], {
+// Use the absolute path of the current Node binary instead of resolving "node"
+// through PATH, so a poisoned PATH cannot redirect us to another executable.
+const nodeBinary = process.execPath;
+
+const result = spawnSync(nodeBinary, ['--test', ...forwarded], {
   stdio: 'inherit',
   shell: false,
 });

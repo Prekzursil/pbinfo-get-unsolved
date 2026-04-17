@@ -711,6 +711,65 @@ function buildStateKeys(pageLink, { namespace = 'pbinfo-get-unsolved', version =
   };
 }
 
+function quicksortPartition(arr, left, right, key) {
+  const pivot = arr[Math.floor((right + left) / 2)][key];
+  let i = left;
+  let j = right;
+  while (i <= j) {
+    while (arr[i][key] < pivot) i++;
+    while (arr[j][key] > pivot) j--;
+    if (i <= j) {
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+      i++;
+      j--;
+    }
+  }
+  return i;
+}
+
+function quicksortByKey(arr, key, left = 0, right = arr.length - 1) {
+  if (arr.length > 1) {
+    const index = quicksortPartition(arr, left, right, key);
+    if (left < index - 1) quicksortByKey(arr, key, left, index - 1);
+    if (index < right) quicksortByKey(arr, key, index, right);
+  }
+  return arr;
+}
+
+function toggleSortedState(sorted, type) {
+  if (sorted[type] === 0) {
+    for (const k of Object.keys(sorted)) sorted[k] = 0;
+    sorted[type] = 1;
+  } else {
+    sorted[type] *= -1;
+  }
+  return sorted;
+}
+
+function filterProblems(problems, filterState) {
+  const list = Array.isArray(problems) ? problems : [];
+  const state = filterState && typeof filterState === 'object' ? filterState : {};
+  const min = Number.isFinite(state.scoreMin) ? state.scoreMin : null;
+  const max = Number.isFinite(state.scoreMax) ? state.scoreMax : null;
+  const includeUnknown = Boolean(state.includeUnknownScore);
+  const statuses = state.statuses instanceof Set ? state.statuses : new Set(state.statuses || []);
+  const query = normalizeForMatch(state.searchQuery || '');
+
+  return list.filter((p) => {
+    if (statuses.size > 0 && !statuses.has(p?.status)) return false;
+    if (query) {
+      const idText = Number.isFinite(p?.id) ? String(p.id) : '';
+      const nameText = normalizeForMatch(p?.name || '');
+      if (!idText.includes(query) && !nameText.includes(query)) return false;
+    }
+    const scoreKnown = p?.userScore != null && Number.isFinite(p?.userScore);
+    if (!scoreKnown) return includeUnknown;
+    if (min != null && p.userScore < min) return false;
+    if (max != null && p.userScore > max) return false;
+    return true;
+  });
+}
+
 if (typeof window === 'undefined' || typeof document === 'undefined') {
   if (typeof module !== 'undefined') {
     module.exports = {
@@ -749,6 +808,10 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       parseIdRangeInput,
       normalizeSnapshotIndex,
       buildStateKeys,
+      quicksortByKey,
+      quicksortPartition,
+      toggleSortedState,
+      filterProblems,
     };
   }
 } else {
@@ -1465,39 +1528,9 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       if (!listDiv.isConnected) appRoot.appendChild(listDiv);
     }
 
-    function quickSort(arr, left, right, key) {
-      let index;
-      if (arr.length > 1) {
-        index = partition(arr, left, right, key);
-        if (left < index - 1) quickSort(arr, left, index - 1, key);
-        if (index < right) quickSort(arr, index, right, key);
-      }
-      return arr;
-    }
-    function partition(arr, left, right, key) {
-      let pivot = arr[Math.floor((right + left) / 2)][key];
-      let i = left;
-      let j = right;
-      while (i <= j) {
-        while (arr[i][key] < pivot) i++;
-        while (arr[j][key] > pivot) j--;
-        if (i <= j) {
-          [arr[i], arr[j]] = [arr[j], arr[i]];
-          i++;
-          j--;
-        }
-      }
-      return i;
-    }
-
     function sortTable(type) {
-      if (sorted[type] === 0) {
-        Object.keys(sorted).forEach((k) => (sorted[k] = 0));
-        sorted[type] = 1;
-      } else {
-        sorted[type] *= -1;
-      }
-      quickSort(allProblems, 0, allProblems.length - 1, type);
+      toggleSortedState(sorted, type);
+      quicksortByKey(allProblems, type);
       if (sorted[type] === -1) allProblems.reverse();
       renderResults();
     }
@@ -1505,25 +1538,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
     window.sortTable = sortTable;
 
     function getVisibleProblems() {
-      const min = Number.isFinite(filterState.scoreMin) ? filterState.scoreMin : null;
-      const max = Number.isFinite(filterState.scoreMax) ? filterState.scoreMax : null;
-      const includeUnknown = Boolean(filterState.includeUnknownScore);
-      const statuses = filterState.statuses;
-      const query = normalizeForMatch(filterState.searchQuery || '');
-
-      return allProblems.filter((p) => {
-        if (!statuses.has(p.status)) return false;
-        if (query) {
-          const idText = Number.isFinite(p.id) ? String(p.id) : '';
-          const nameText = normalizeForMatch(p.name || '');
-          if (!idText.includes(query) && !nameText.includes(query)) return false;
-        }
-        const scoreKnown = p.userScore != null && Number.isFinite(p.userScore);
-        if (!scoreKnown) return includeUnknown;
-        if (min != null && p.userScore < min) return false;
-        if (max != null && p.userScore > max) return false;
-        return true;
-      });
+      return filterProblems(allProblems, filterState);
     }
 
     function updateSummary(visible) {
