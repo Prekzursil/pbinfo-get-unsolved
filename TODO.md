@@ -25,8 +25,7 @@ post-v3.0.0.
 - [ ] Publish the Chrome extension to the Chrome Web Store once icons and
       privacy-policy copy are finalized.
 - [ ] Submit the Firefox `.xpi` to AMO for signing. The manifest already
-      declares `browser_specific_settings.gecko.id =
-      pbinfo-get-unsolved@prekzursil`.
+      declares the Gecko add-on id as `pbinfo-get-unsolved@prekzursil`.
 - [ ] Add Playwright/Chrome DevTools smoke test that loads the extension
       against a static pbinfo HTML fixture and verifies the overlay appears.
 

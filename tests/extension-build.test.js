@@ -48,7 +48,8 @@ test('zipBuffer: round-trip via zlib inflateRawSync recovers original content', 
   const method = archive.readUInt16LE(8);
   const compressedLen = archive.readUInt32LE(18);
   const body = archive.slice(headerLen, headerLen + compressedLen);
-  const restored = method === 8 ? zlib.inflateRawSync(body).toString('utf8') : body.toString('utf8');
+  const restored =
+    method === 8 ? zlib.inflateRawSync(body).toString('utf8') : body.toString('utf8');
   assert.equal(restored, payload);
 });
 

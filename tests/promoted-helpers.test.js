@@ -93,7 +93,10 @@ test('normalizeSnapshotIndex: filters unnamed entries, sorts by savedAt desc', (
   ]);
   assert.equal(out.length, 3);
   assert.equal(out[0].id, 'b');
-  assert.equal(out[0].storageLevel, 'bogus' === out[0].storageLevel ? out[0].storageLevel : 'minimal');
+  assert.equal(
+    out[0].storageLevel,
+    'bogus' === out[0].storageLevel ? out[0].storageLevel : 'minimal'
+  );
   // 'bogus' is rewritten to 'minimal' because it's not in the allowed set.
   assert.equal(out[0].storageLevel, 'minimal');
   assert.equal(out[0].storageVersion, 1);

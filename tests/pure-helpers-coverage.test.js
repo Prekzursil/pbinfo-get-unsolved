@@ -125,10 +125,7 @@ test('isLikelyPbinfoBlockedHtml: detects cloudflare and generic security challen
 
 test('parseTotalProblems: extracts number or returns null', () => {
   assert.equal(parseTotalProblems('<span class="numar_probleme">1234</span>'), 1234);
-  assert.equal(
-    parseTotalProblems('<span class="something numar_probleme other">  42 </span>'),
-    42
-  );
+  assert.equal(parseTotalProblems('<span class="something numar_probleme other">  42 </span>'), 42);
   assert.equal(parseTotalProblems('<span>no counter here</span>'), null);
   assert.equal(parseTotalProblems(null), null);
 });
@@ -137,11 +134,7 @@ test('normalizeListUrl: null inputs, invalid URL, base-only fallback', () => {
   assert.equal(normalizeListUrl(null, null), null);
   assert.equal(normalizeListUrl('not a url', ''), null);
   assert.equal(
-    normalizeListUrl(
-      '',
-      'https://www.pbinfo.ro/?pagina=probleme-lista&start=30',
-      'start'
-    ),
+    normalizeListUrl('', 'https://www.pbinfo.ro/?pagina=probleme-lista&start=30', 'start'),
     'https://www.pbinfo.ro/?pagina=probleme-lista'
   );
 });
@@ -167,10 +160,7 @@ test('buildPageUrl: pageBase defaults to 1 when not finite', () => {
 test('computeBackoffWithJitter: handles non-finite attempt and defaults', () => {
   assert.equal(computeBackoffWithJitter('x', { jitter: false }), 500);
   assert.equal(computeBackoffWithJitter(-5, { jitter: false }), 500);
-  assert.equal(
-    computeBackoffWithJitter(2, { baseMs: 'x', capMs: 'x', jitter: false }),
-    2000
-  );
+  assert.equal(computeBackoffWithJitter(2, { baseMs: 'x', capMs: 'x', jitter: false }), 2000);
 });
 
 test('computeBackoffWithJitter: clamps NaN random to safe default', () => {
@@ -191,7 +181,14 @@ test('computeBackoffWithJitter: default random path still returns finite number'
 
 test('nextAdaptiveThrottleState: disabled short-circuits and sanitizes state', () => {
   const out = nextAdaptiveThrottleState(
-    { enabled: false, baseDelayMs: -10, baseConcurrency: -5, delayMs: -2, concurrency: -1, cleanStreak: -3 },
+    {
+      enabled: false,
+      baseDelayMs: -10,
+      baseConcurrency: -5,
+      delayMs: -2,
+      concurrency: -1,
+      cleanStreak: -3,
+    },
     'success'
   );
   assert.equal(out.enabled, false);
@@ -203,7 +200,14 @@ test('nextAdaptiveThrottleState: disabled short-circuits and sanitizes state', (
 
 test('nextAdaptiveThrottleState: success without reaching streak threshold just increments', () => {
   const out = nextAdaptiveThrottleState(
-    { enabled: true, baseDelayMs: 0, baseConcurrency: 3, delayMs: 0, concurrency: 3, cleanStreak: 0 },
+    {
+      enabled: true,
+      baseDelayMs: 0,
+      baseConcurrency: 3,
+      delayMs: 0,
+      concurrency: 3,
+      cleanStreak: 0,
+    },
     'success'
   );
   assert.equal(out.cleanStreak, 1);
@@ -211,7 +215,14 @@ test('nextAdaptiveThrottleState: success without reaching streak threshold just 
 
 test('nextAdaptiveThrottleState: unknown event falls through to error branch', () => {
   const out = nextAdaptiveThrottleState(
-    { enabled: true, baseDelayMs: 0, baseConcurrency: 3, delayMs: 0, concurrency: 3, cleanStreak: 5 },
+    {
+      enabled: true,
+      baseDelayMs: 0,
+      baseConcurrency: 3,
+      delayMs: 0,
+      concurrency: 3,
+      cleanStreak: 5,
+    },
     'timeout'
   );
   assert.equal(out.cleanStreak, 0);
@@ -226,7 +237,14 @@ test('nextAdaptiveThrottleState: non-object state is coerced safely', () => {
 
 test('nextAdaptiveThrottleState: blocked uses caps correctly', () => {
   const out = nextAdaptiveThrottleState(
-    { enabled: true, baseDelayMs: 100, baseConcurrency: 4, delayMs: 200, concurrency: 4, cleanStreak: 1 },
+    {
+      enabled: true,
+      baseDelayMs: 100,
+      baseConcurrency: 4,
+      delayMs: 200,
+      concurrency: 4,
+      cleanStreak: 1,
+    },
     'blocked',
     { capMs: 'bogus' }
   );
@@ -257,12 +275,7 @@ test('migrateStateSnapshotToV2: respects explicit storage level full', () => {
 
 test('migrateStateSnapshotToV2: normalizes deferred entries (array + object)', () => {
   const m = migrateStateSnapshotToV2({
-    deferred: [
-      [5, 2],
-      { pageIndex: 7, retryCount: 1 },
-      ['x', 'y'],
-      null,
-    ],
+    deferred: [[5, 2], { pageIndex: 7, retryCount: 1 }, ['x', 'y'], null],
   });
   assert.deepEqual(m.deferred, [
     [5, 2],
@@ -283,9 +296,7 @@ test('extractSnapshotFromImport: plain snapshot path and strings', () => {
 
 test('csvEscape: via problemsToCsv handles missing arrays, newlines, nulls', () => {
   assert.ok(problemsToCsv(null).startsWith('\ufeffid,'));
-  const csv = problemsToCsv([
-    { id: null, name: 'line1\nline2', status: null, link: '' },
-  ]);
+  const csv = problemsToCsv([{ id: null, name: 'line1\nline2', status: null, link: '' }]);
   assert.ok(csv.includes('"line1\nline2"'));
 });
 
@@ -303,10 +314,7 @@ test('problemsToLinksText / Ids / Markdown: non-array, null fields', () => {
     '- [title](<https://a>)'
   );
   // entry without name yet with id still renders
-  assert.equal(
-    problemsToMarkdownText([{ id: 9, link: 'https://a' }]),
-    '- [#9](<https://a>)'
-  );
+  assert.equal(problemsToMarkdownText([{ id: 9, link: 'https://a' }]), '- [#9](<https://a>)');
 });
 
 test('serializeProblemForSnapshot: minimal vs full levels', () => {

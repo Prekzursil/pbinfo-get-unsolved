@@ -58,9 +58,7 @@ test('buildScoreCandidatesFromCard: badge outside footer and without score marke
 });
 
 test('buildScoreCandidatesFromCard: anchor with score tooltip picks up isLink=true', () => {
-  const card = cardFrom(
-    `<a class="something" href="/x" title="Punctaj obținut">85p</a>`
-  );
+  const card = cardFrom(`<a class="something" href="/x" title="Punctaj obținut">85p</a>`);
   const info = extractScoreInfoFromCard(card);
   assert.equal(info.userScore, 85);
 });

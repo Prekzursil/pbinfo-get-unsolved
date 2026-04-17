@@ -6,20 +6,20 @@ itself.
 
 ## Targets
 
-| Dimension | Target | Enforcer |
-| --- | --- | --- |
-| Line coverage | 100% (no exclusions) | Codecov (`codecov.yml`) + `c8` (`.c8rc.json`) |
-| Branch coverage | 100% (no exclusions) | Codecov + `c8` |
-| Statement coverage | 100% (no exclusions) | Codecov + `c8` |
-| Function coverage | 100% (no exclusions) | `c8` |
-| Sonar quality gate | 0 issues, 0 hotspots | SonarCloud |
-| Codacy grade | 0 issues | Codacy |
-| QLTY | 0 smells (`mode = "block"`) | `.qlty/qlty.toml` |
-| Semgrep | 0 findings | Semgrep Zero (reusable workflow) |
-| DeepSource / DeepScan | 0 findings | Prekzursil/quality-zero-platform |
-| Dependabot | 0 open alerts (any severity) | GitHub |
-| CodeQL | 0 alerts | Managed CodeQL baseline |
-| Secrets preflight | pass | Aggregated gate |
+| Dimension             | Target                       | Enforcer                                      |
+| --------------------- | ---------------------------- | --------------------------------------------- |
+| Line coverage         | 100% (no exclusions)         | Codecov (`codecov.yml`) + `c8` (`.c8rc.json`) |
+| Branch coverage       | 100% (no exclusions)         | Codecov + `c8`                                |
+| Statement coverage    | 100% (no exclusions)         | Codecov + `c8`                                |
+| Function coverage     | 100% (no exclusions)         | `c8`                                          |
+| Sonar quality gate    | 0 issues, 0 hotspots         | SonarCloud                                    |
+| Codacy grade          | 0 issues                     | Codacy                                        |
+| QLTY                  | 0 smells (`mode = "block"`)  | `.qlty/qlty.toml`                             |
+| Semgrep               | 0 findings                   | Semgrep Zero (reusable workflow)              |
+| DeepSource / DeepScan | 0 findings                   | Prekzursil/quality-zero-platform              |
+| Dependabot            | 0 open alerts (any severity) | GitHub                                        |
+| CodeQL                | 0 alerts                     | Managed CodeQL baseline                       |
+| Secrets preflight     | pass                         | Aggregated gate                               |
 
 ## Where the rules live
 

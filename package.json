@@ -10,7 +10,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
-    "test": "node --test",
+    "test": "node scripts/test-runner.cjs",
     "test:coverage": "c8 --config .c8rc.json node --test"
   },
   "devDependencies": {

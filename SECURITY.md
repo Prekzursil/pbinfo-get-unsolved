@@ -4,10 +4,10 @@
 
 Security fixes are applied to the `main` branch.
 
-| Version | Supported |
-| --- | --- |
-| `main` | :white_check_mark: |
-| Other branches/tags | :x: |
+| Version             | Supported          |
+| ------------------- | ------------------ |
+| `main`              | :white_check_mark: |
+| Other branches/tags | :x:                |
 
 ## Reporting a Vulnerability
 

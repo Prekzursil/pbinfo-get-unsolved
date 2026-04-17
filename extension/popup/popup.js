@@ -22,9 +22,7 @@ function setSubtitleNavigateHint() {
   a.rel = 'noopener';
   a.textContent = 'pbinfo.ro';
   subtitleEl.appendChild(a);
-  subtitleEl.appendChild(
-    document.createTextNode(' în tab-ul activ, apoi reîncarcă acest popup.')
-  );
+  subtitleEl.appendChild(document.createTextNode(' în tab-ul activ, apoi reîncarcă acest popup.'));
 }
 
 function isPbinfoOrigin(origin) {

@@ -6,13 +6,13 @@ Scanner pentru probleme pbinfo nerezolvate, disponibil ca **extensie de browser*
 
 ## Quick Start — alege un canal
 
-| Canal | Recomandat pentru | Instalare |
-| --- | --- | --- |
-| **Extensie Chrome / Edge / Brave** | Cel mai simplu pe orice Chromium | [`pbinfo-get-unsolved-chrome-vX.Y.Z.zip`](#extensie-chrome) din Releases |
-| **Extensie Firefox (MV3)** | Firefox 115+ | [`pbinfo-get-unsolved-firefox-vX.Y.Z.xpi`](#extensie-firefox) din Releases |
-| **Userscript (Tampermonkey etc.)** | Control complet peste script | `pbinfo-get-unsolved.userscript.js` din Releases |
-| **Bookmarklet** | Setup one-shot, fără manager | `pbinfo-get-unsolved.bookmarklet.txt` |
-| **Consolă dev tools** | Debugging sau rulare ad-hoc | `pbinfo-get-unsolved-enhanced.js` copy-paste |
+| Canal                              | Recomandat pentru                | Instalare                                                                  |
+| ---------------------------------- | -------------------------------- | -------------------------------------------------------------------------- |
+| **Extensie Chrome / Edge / Brave** | Cel mai simplu pe orice Chromium | [`pbinfo-get-unsolved-chrome-vX.Y.Z.zip`](#extensie-chrome) din Releases   |
+| **Extensie Firefox (MV3)**         | Firefox 115+                     | [`pbinfo-get-unsolved-firefox-vX.Y.Z.xpi`](#extensie-firefox) din Releases |
+| **Userscript (Tampermonkey etc.)** | Control complet peste script     | `pbinfo-get-unsolved.userscript.js` din Releases                           |
+| **Bookmarklet**                    | Setup one-shot, fără manager     | `pbinfo-get-unsolved.bookmarklet.txt`                                      |
+| **Consolă dev tools**              | Debugging sau rulare ad-hoc      | `pbinfo-get-unsolved-enhanced.js` copy-paste                               |
 
 ### Extensie Chrome
 
@@ -194,13 +194,13 @@ npm run build            # userscript + bookmarklet + chrome.zip + firefox.xpi
 
 ## Quality gates
 
-| Semnal | Unde | Țintă |
-| --- | --- | --- |
-| Tests | `npm test` / CI | 100% pass |
-| Coverage | Codecov, Codacy, Sonar, QLTY | 100% line + 100% branch (fără excluderi) |
-| Lint | ESLint | 0 erori |
-| Format | Prettier | 0 diferențe |
-| Securitate | CodeQL, Semgrep, Dependabot | 0 alerte active |
+| Semnal     | Unde                         | Țintă                                    |
+| ---------- | ---------------------------- | ---------------------------------------- |
+| Tests      | `npm test` / CI              | 100% pass                                |
+| Coverage   | Codecov, Codacy, Sonar, QLTY | 100% line + 100% branch (fără excluderi) |
+| Lint       | ESLint                       | 0 erori                                  |
+| Format     | Prettier                     | 0 diferențe                              |
+| Securitate | CodeQL, Semgrep, Dependabot  | 0 alerte active                          |
 
 Vezi [`docs/quality/QUALITY_ZERO_GATES.md`](docs/quality/QUALITY_ZERO_GATES.md) pentru detalii.
 

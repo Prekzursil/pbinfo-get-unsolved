@@ -129,7 +129,9 @@ function main() {
     const png = encodePng(size);
     const file = path.join(OUT_DIR, `icon-${size}.png`);
     fs.writeFileSync(file, png);
-    console.log(`Wrote ${path.relative(path.resolve(__dirname, '..'), file)} (${png.length} bytes)`);
+    console.log(
+      `Wrote ${path.relative(path.resolve(__dirname, '..'), file)} (${png.length} bytes)`
+    );
   }
 }
 

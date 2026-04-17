@@ -13,10 +13,10 @@ npm run build:extension  # just the two extension archives
 
 Outputs:
 
-| File | Target |
-| --- | --- |
-| `dist/pbinfo-get-unsolved-chrome-v<ver>.zip` | Chrome, Edge, Brave, any Chromium |
-| `dist/pbinfo-get-unsolved-firefox-v<ver>.xpi` | Firefox 115+ (MV3) |
+| File                                          | Target                            |
+| --------------------------------------------- | --------------------------------- |
+| `dist/pbinfo-get-unsolved-chrome-v<ver>.zip`  | Chrome, Edge, Brave, any Chromium |
+| `dist/pbinfo-get-unsolved-firefox-v<ver>.xpi` | Firefox 115+ (MV3)                |
 
 ## Load unpacked (Chrome)
 
@@ -48,10 +48,10 @@ Outputs:
 
 The template `manifest.template.json` is rendered into two variants:
 
-| Key | Chrome | Firefox |
-| --- | --- | --- |
-| `background.service_worker` | kept | removed |
-| `background.scripts` | removed | kept |
+| Key                               | Chrome  | Firefox                                 |
+| --------------------------------- | ------- | --------------------------------------- |
+| `background.service_worker`       | kept    | removed                                 |
+| `background.scripts`              | removed | kept                                    |
 | `browser_specific_settings.gecko` | removed | kept (`pbinfo-get-unsolved@prekzursil`) |
 
 ## Icons
