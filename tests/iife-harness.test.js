@@ -552,6 +552,70 @@ test('iife-harness: id-range score-batch success path exercises fetchIdRangeScor
   }
 });
 
+test('iife-harness: import JSON flow with a stubbed file triggers saveImportedSnapshot', async () => {
+  const importable = {
+    version: 2,
+    schemaVersion: 2,
+    storageLevel: 'full',
+    savedAt: Date.now(),
+    pageLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
+    scanMode: 'list',
+    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
+    scanStartPage: 1,
+    pageQueue: [],
+    deferred: [],
+    inFlightPages: [],
+    seenProblemIds: [],
+    problems: [
+      { id: 99, name: 'imp', link: '/99', status: 'solved', userScore: 100, maxScore: 100 },
+    ],
+    stats: { solved: 1, tried: 0, unattempted: 0, total: 1, pages: 1 },
+  };
+  const { ctx, window, document } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 4; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+  // Find the file input the import button created and feed it a fake file.
+  const inputs = Array.from(document.querySelectorAll('input[type="file"]'));
+  for (const input of inputs) {
+    const stubFile = {
+      name: 'snapshot.json',
+      text: async () => JSON.stringify(importable),
+    };
+    Object.defineProperty(input, 'files', {
+      value: [stubFile],
+      configurable: true,
+    });
+    try {
+      input.dispatchEvent(new window.Event('change', { bubbles: true }));
+    } catch {
+      /* best effort */
+    }
+  }
+  for (let i = 0; i < 6; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
 test('iife-harness: original pre-seeded snapshot triggers restoreFromSavedState', async () => {
   // Pre-populate a v2 snapshot for the default list URL. When the scanner
   // starts it will see the stored state and offer to restore, which we
