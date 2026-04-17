@@ -1103,6 +1103,34 @@ test('iife-harness: mode-prompt returning null aborts the start', async () => {
   await startAndDrain(ctx, window, 4);
 });
 
+test('iife-harness: id-range problem page missing #scor_utilizator_problema logs the warn-once', async () => {
+  const problemPage = `<!doctype html><html><body>
+    <h1>#7 Demo</h1>
+    <table>
+      <tr>
+        <td><a href="/user/x">Poster</a></td>
+        <td>-</td>
+        <td>-</td>
+        <td>Mediu</td>
+        <td>No score cell here</td>
+      </tr>
+    </table>
+  </body></html>`;
+  const { ctx, window } = buildContext({
+    fetchResponse: { ok: true, status: 200, text: async () => problemPage },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'id-range',
+      PBINFO_GET_UNSOLVED_ID_START: 7,
+      PBINFO_GET_UNSOLVED_ID_END: 7,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: false,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+    },
+  });
+  await startAndDrain(ctx, window, 8);
+});
+
 test('iife-harness: id-range with debug enabled exercises the problem-page debug dump', async () => {
   const problemPage = `<!doctype html><html><body>
     <h1>#7 Demo</h1>
