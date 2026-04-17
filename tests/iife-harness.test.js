@@ -506,6 +506,54 @@ test('iife-harness: overlay=true + closeOverlay exercise the overlay teardown br
   }
 });
 
+test('iife-harness: id-range score-batch success path exercises fetchIdRangeScoreBatch + processIdRangeFromScoreBatch', async () => {
+  const batchPayload = JSON.stringify({
+    data: [{ id_problema: 7, scor: '42' }],
+  });
+  let call = 0;
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'id-range',
+      PBINFO_GET_UNSOLVED_ID_START: 7,
+      PBINFO_GET_UNSOLVED_ID_END: 7,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: true,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH_SIZE: 200,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+    },
+  });
+  window.fetch = () => {
+    call += 1;
+    // First call is the score-batch JSON endpoint. Anything afterward we
+    // fulfill with an empty body so no additional scan work spawns.
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      text: async () => (call === 1 ? batchPayload : ''),
+    });
+  };
+  ctx.fetch = window.fetch;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 12; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+  // Explicitly stop if still running so the test does not outlive the
+  // timer budget.
+  try {
+    window.stopScan?.('harness');
+  } catch {}
+  for (let i = 0; i < 4; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
 test('iife-harness: original pre-seeded snapshot triggers restoreFromSavedState', async () => {
   // Pre-populate a v2 snapshot for the default list URL. When the scanner
   // starts it will see the stored state and offer to restore, which we
