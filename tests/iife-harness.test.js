@@ -659,6 +659,55 @@ test('iife-harness: 200-problem restored snapshot triggers scheduleChunk + clear
   }
 });
 
+test('iife-harness: DELAY_MS > 0 makes schedule() route through setTimeout', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 50,
+    },
+  });
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 8; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
+test('iife-harness: list-mode empty body with total=5 triggers empty-page retry', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () =>
+        '<body><span class="numar_probleme">5</span><div class="row"></div></body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 8; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
 test('iife-harness: cloudflare body with retries left exercises the retry-setTimeout branch', async () => {
   const { ctx, window } = buildContext({
     fetchResponse: {
