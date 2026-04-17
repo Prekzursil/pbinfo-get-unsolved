@@ -1372,6 +1372,28 @@ test('iife-harness: overlay=true + closeOverlay exercise the overlay teardown br
   await drainMicrotasks(4);
 });
 
+test('iife-harness: id-range with off-origin location throws the safeFetchUrl-null branch', async () => {
+  // Set ctx.location to a non-https origin; safePbinfoFetchUrl returns null
+  // for the id-range URL built from location.origin, firing the L3856-3859
+  // early-return branch.
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'id-range',
+      PBINFO_GET_UNSOLVED_ID_START: 1,
+      PBINFO_GET_UNSOLVED_ID_END: 1,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: false,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+    },
+  });
+  // Non-https origin — safePbinfoFetchUrl rejects non-https schemes.
+  ctx.location = { href: 'http://www.pbinfo.ro/', origin: 'http://www.pbinfo.ro' };
+  window.location = ctx.location;
+  await startAndDrain(ctx, window, 4);
+});
+
 test('iife-harness: 50-ID score-batch hits maybeLogIdRangeProgress log-every-50 branch', async () => {
   // Score batch with 50 problems, all scor=50 -> processIdRangeFromScoreBatch
   // runs 50 times, stats.pages hits 50, 50 % 50 === 0 -> L3450-3452 addLog.
