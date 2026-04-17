@@ -1424,6 +1424,52 @@ test('iife-harness: virtualize rows + 200-problem snapshot displays the virtuali
   await drainMicrotasks(6);
 });
 
+test('iife-harness: restore snapshot with resumeFromPage fallback + empty filters.statuses hits defaults', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const snap = makeEmptySnapshot(listUrl, {
+    problems: [
+      { id: 2, name: 'r', link: '/2', status: 'tried', userScore: 0, maxScore: 100 },
+    ],
+    stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
+  });
+  // Remove nextSequentialPage + add resumeFromPage -> L3381-3383 fallback.
+  delete snap.nextSequentialPage;
+  snap.resumeFromPage = 3;
+  // Empty statuses array -> L3344-3347 default fallback (tried+unattempted).
+  snap.filters = {
+    statuses: [],
+    includeUnknownScore: true,
+    scoreMin: null,
+    scoreMax: null,
+    searchQuery: '',
+  };
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.localStorage.setItem(keys.full, JSON.stringify(snap));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  let pcall = 0;
+  window.prompt = (_m, fallback) => {
+    pcall += 1;
+    if (pcall === 1) return listUrl;
+    return fallback ?? '';
+  };
+  ctx.prompt = window.prompt;
+  await startAndDrain(ctx, window, 8);
+});
+
 test('iife-harness: autosave-enabled scan updates lastAutosaveAt + lastAutosavePages', async () => {
   // Render at least one card so stats.pages > 0 and maybeAutoSave runs with
   // a successful save (default localStorage shim always succeeds).
