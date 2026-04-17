@@ -5,9 +5,7 @@ All notable changes to this project are documented here. The project follows
 
 ## Unreleased
 
-Preparing v3.0.0 — Chrome/Firefox extensions, Quality Zero gates, high branch
-coverage. See the [v3.0.0 section](#v300) below for the full set of changes once
-released.
+_Nothing yet. See v3.0.0 for the current release._
 
 ## v3.0.0
 

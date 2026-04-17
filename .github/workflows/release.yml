@@ -39,8 +39,8 @@ jobs:
       - name: Format check
         run: npm run format:check
 
-      - name: Build dist artifacts
-        run: npm run build:bookmarklet
+      - name: Build dist artifacts (userscript + bookmarklet + extensions)
+        run: npm run build
 
       - name: Generate checksums
         run: |
@@ -49,6 +49,8 @@ jobs:
             pbinfo-get-unsolved.userscript.js \
             pbinfo-get-unsolved.min.js \
             pbinfo-get-unsolved.bookmarklet.txt \
+            pbinfo-get-unsolved-chrome-v*.zip \
+            pbinfo-get-unsolved-firefox-v*.xpi \
             > checksums.sha256
 
       - name: Resolve release tag
@@ -69,4 +71,6 @@ jobs:
             dist/pbinfo-get-unsolved.userscript.js
             dist/pbinfo-get-unsolved.min.js
             dist/pbinfo-get-unsolved.bookmarklet.txt
+            dist/pbinfo-get-unsolved-chrome-v*.zip
+            dist/pbinfo-get-unsolved-firefox-v*.xpi
             dist/checksums.sha256
