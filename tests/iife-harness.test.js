@@ -78,6 +78,32 @@ function clickAllButtons(window, document) {
   }
 }
 
+function overrideSelectValueToSnapshot(document) {
+  const selects = Array.from(document.querySelectorAll('select'));
+  for (const sel of selects) {
+    const options = Array.from(sel.querySelectorAll('option'));
+    const snapshotOption = options.find((o) => (o.value || '').startsWith('snapshot:'));
+    if (!snapshotOption) continue;
+    try {
+      const proto = Object.getPrototypeOf(sel);
+      const originalDesc = Object.getOwnPropertyDescriptor(proto, 'value');
+      Object.defineProperty(proto, 'value', {
+        configurable: true,
+        get() {
+          return snapshotOption.value;
+        },
+      });
+      sel.__restoreProto = () => {
+        if (originalDesc) Object.defineProperty(proto, 'value', originalDesc);
+      };
+    } catch {
+      /* best effort */
+    }
+    return sel;
+  }
+  return null;
+}
+
 function installSequencedFetch(window, ctx, responses) {
   let call = 0;
   window.fetch = () => {
@@ -373,19 +399,20 @@ test('iife-harness: list debug scan with unattempted card hits debugDumpCard wit
   await startAndDrain(ctx, window, 8);
 });
 
-test('iife-harness: multi-page list scan exercises queue progression + finishScan complete', async () => {
-  function makePage(id) {
-    return `<!doctype html><html><body>
-      <span class="numar_probleme">30</span>
-      <div class="row">
-        <div class="card mb-3">
-          <code>#${id}</code>
-          <a href="/probleme/${id}/x" class="text-dark"><h5>#${id} x</h5></a>
-          <div class="card-footer"><span class="badge" title="Punctaj obtinut">50</span></div>
-        </div>
+function makeListPage(id) {
+  return `<!doctype html><html><body>
+    <span class="numar_probleme">30</span>
+    <div class="row">
+      <div class="card mb-3">
+        <code>#${id}</code>
+        <a href="/probleme/${id}/x" class="text-dark"><h5>#${id} x</h5></a>
+        <div class="card-footer"><span class="badge" title="Punctaj obtinut">50</span></div>
       </div>
-    </body></html>`;
-  }
+    </div>
+  </body></html>`;
+}
+
+test('iife-harness: multi-page list scan exercises queue progression + finishScan complete', async () => {
   let n = 0;
   const ids = [1, 2, 3];
   const { ctx, window } = buildContext({
@@ -398,7 +425,7 @@ test('iife-harness: multi-page list scan exercises queue progression + finishSca
     },
   });
   window.fetch = () => {
-    const body = n < ids.length ? makePage(ids[n]) : '<body>Pagina nu exista.</body>';
+    const body = n < ids.length ? makeListPage(ids[n]) : '<body>Pagina nu exista.</body>';
     n += 1;
     return Promise.resolve({ ok: true, status: 200, text: async () => body });
   };
@@ -616,42 +643,7 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
   window.prompt = () => promptReplies[promptCalls++] ?? null;
   ctx.prompt = window.prompt;
   await startAndDrain(ctx, window, 8);
-  // Pre-select the seeded snapshot on the state dropdown so the load /
-  // clear buttons exercise loadSnapshotItem + deleteSnapshotItem instead
-  // of the autosave fall-through branch. linkedom makes `select.value` a
-  // getter-only property on HTMLSelectElement, so we shadow it.
-  const selects = Array.from(document.querySelectorAll('select'));
-  for (const sel of selects) {
-    // linkedom's HTMLSelectElement doesn't always expose .options; walk
-    // <option> children directly. Move the snapshot option to the front
-    // and mark it selected — linkedom reflects `value` from the first
-    // selected option, so this propagates cleanly to the IIFE.
-    const options = Array.from(sel.querySelectorAll('option'));
-    const snapshotOption = options.find((o) => (o.value || '').startsWith('snapshot:'));
-    if (snapshotOption) {
-      // linkedom defines `value` as a configurable getter on the
-      // HTMLSelectElement prototype. Override at the prototype level so
-      // the IIFE's `stateSelect.value` read returns the seeded snapshot id.
-      // Remember the original descriptor so the caller can restore it.
-      try {
-        const proto = Object.getPrototypeOf(sel);
-        const originalDesc = Object.getOwnPropertyDescriptor(proto, 'value');
-        Object.defineProperty(proto, 'value', {
-          configurable: true,
-          get() {
-            return snapshotOption.value;
-          },
-        });
-        // Expose restore fn on sel for the test to call after it's done.
-        sel.__restoreProto = () => {
-          if (originalDesc) Object.defineProperty(proto, 'value', originalDesc);
-        };
-      } catch {
-        /* best effort */
-      }
-      break;
-    }
-  }
+  overrideSelectValueToSnapshot(document);
   // After init, click every button to exercise load/save/clear/export/import
   // snapshot handlers against the pre-seeded state.
   const controls = Array.from(document.querySelectorAll('button, select'));

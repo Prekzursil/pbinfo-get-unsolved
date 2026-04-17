@@ -798,24 +798,65 @@ function formatProgressText({
   const pauseText = paused ? ' · pauză' : '';
   const inflightText = inFlight > 0 ? ` · în lucru ${inFlight}` : '';
   const startText = scanStart > 1 ? ` (de la ${scanStart})` : '';
-  const adaptiveText =
-    adaptive && adaptive.enabled
-      ? ` · throttle delay=${adaptive.delayMs}ms concurență=${adaptive.concurrency}`
-      : '';
+  const adaptiveText = adaptive?.enabled
+    ? ` · throttle delay=${adaptive.delayMs}ms concurență=${adaptive.concurrency}`
+    : '';
   const pagesDone = Number.isFinite(stats.pages) ? stats.pages : 0;
   const totalCount = Number.isFinite(stats.total) ? stats.total : 0;
 
+  const suffix = `${adaptiveText}${pauseText}${inflightText}${startText}`;
   if (scanMode === 'id-range') {
-    const endId = Number.isFinite(config.idRange?.endId) ? config.idRange.endId : null;
-    const totalIds = endId != null ? Math.max(0, endId - scanStart + 1) : null;
-    const idsText = totalIds != null && totalIds > 0 ? `${pagesDone}/${totalIds}` : `${pagesDone}`;
-    const etaMs = computeEta(pagesDone, totalIds, elapsedMs);
-    const etaText = etaMs != null ? ` · ETA ~${formatDuration(etaMs)}` : '';
-    const missingText = stats.missing > 0 ? ` · 404 ${stats.missing}` : '';
-    const forbiddenText = stats.forbidden > 0 ? ` · 403 ${stats.forbidden}` : '';
-    return `Progres: ID-uri ${idsText}, probleme ${totalCount} (găsite)${missingText} · timp ${formatDuration(elapsedMs)}${etaText}${adaptiveText}${pauseText}${inflightText}${startText}${forbiddenText}`;
+    return formatIdRangeProgress({
+      pagesDone,
+      totalCount,
+      stats,
+      config,
+      scanStart,
+      elapsedMs,
+      suffix,
+    });
   }
+  return formatListProgress({
+    pagesDone,
+    totalCount,
+    totalPages,
+    totalProblems,
+    pageSize,
+    scanStart,
+    elapsedMs,
+    suffix,
+  });
+}
 
+function formatIdRangeProgress({
+  pagesDone,
+  totalCount,
+  stats,
+  config,
+  scanStart,
+  elapsedMs,
+  suffix,
+}) {
+  const endId = Number.isFinite(config?.idRange?.endId) ? config.idRange.endId : null;
+  const totalIds = endId != null ? Math.max(0, endId - scanStart + 1) : null;
+  const idsText = totalIds != null && totalIds > 0 ? `${pagesDone}/${totalIds}` : `${pagesDone}`;
+  const etaMs = computeEta(pagesDone, totalIds, elapsedMs);
+  const etaText = etaMs != null ? ` · ETA ~${formatDuration(etaMs)}` : '';
+  const missingText = stats.missing > 0 ? ` · 404 ${stats.missing}` : '';
+  const forbiddenText = stats.forbidden > 0 ? ` · 403 ${stats.forbidden}` : '';
+  return `Progres: ID-uri ${idsText}, probleme ${totalCount} (găsite)${missingText} · timp ${formatDuration(elapsedMs)}${etaText}${suffix}${forbiddenText}`;
+}
+
+function formatListProgress({
+  pagesDone,
+  totalCount,
+  totalPages,
+  totalProblems,
+  pageSize,
+  scanStart,
+  elapsedMs,
+  suffix,
+}) {
   const scanPagesTotal = Number.isFinite(totalPages)
     ? Math.max(0, totalPages - scanStart + 1)
     : null;
@@ -837,7 +878,7 @@ function formatProgressText({
   }
   const etaMs = computeEta(pagesDone, scanPagesTotal, elapsedMs);
   const etaText = etaMs != null ? ` · ETA ~${formatDuration(etaMs)}` : '';
-  return `Progres: pagini ${pagesText}, probleme ${probsText} · timp ${formatDuration(elapsedMs)}${etaText}${adaptiveText}${pauseText}${inflightText}${startText}`;
+  return `Progres: pagini ${pagesText}, probleme ${probsText} · timp ${formatDuration(elapsedMs)}${etaText}${suffix}`;
 }
 
 function computeEta(done, total, elapsedMs) {
@@ -932,8 +973,15 @@ function loadStoredTheme(storage = globalThis.localStorage, key = 'pbinfo-get-un
 function applyThemeAttribute(targetEl, value) {
   const v = resolveThemeValue(value);
   if (!targetEl || typeof targetEl.setAttribute !== 'function') return v;
-  if (v === 'system') targetEl.removeAttribute('data-theme');
-  else targetEl.setAttribute('data-theme', v);
+  // Sonar S6754: prefer dataset over set/removeAttribute for data-*.
+  if (targetEl.dataset) {
+    if (v === 'system') delete targetEl.dataset.theme;
+    else targetEl.dataset.theme = v;
+  } else if (v === 'system') {
+    targetEl.removeAttribute('data-theme');
+  } else {
+    targetEl.setAttribute('data-theme', v);
+  }
   return v;
 }
 

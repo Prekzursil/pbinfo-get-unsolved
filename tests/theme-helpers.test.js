@@ -11,7 +11,7 @@ const {
 
 function makeStorage(values = {}) {
   return {
-    getItem: (k) => (Object.prototype.hasOwnProperty.call(values, k) ? values[k] : null),
+    getItem: (k) => (Object.hasOwn(values, k) ? values[k] : null),
     setItem: () => {},
     removeItem: () => {},
   };
