@@ -769,6 +769,21 @@ function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
   return base + Math.floor((id - base) / size) * size;
 }
 
+function computeRenderShape(
+  listAll,
+  { tableRenderChunkSize = 150, virtualizeRows = false, virtualRowsLimit = null } = {}
+) {
+  const all = Array.isArray(listAll) ? listAll : [];
+  const chunkSize = Math.max(
+    25,
+    Number.isFinite(tableRenderChunkSize) ? tableRenderChunkSize : 150
+  );
+  const shouldVirtualize =
+    Boolean(virtualizeRows) && Number.isFinite(virtualRowsLimit) && all.length > virtualRowsLimit;
+  const list = shouldVirtualize ? all.slice(0, virtualRowsLimit) : all;
+  return { chunkSize, shouldVirtualize, list, total: all.length };
+}
+
 async function copyTextViaClipboardApi(navigator, value) {
   if (!navigator?.clipboard?.writeText) return { attempted: false, error: null };
   try {
@@ -1070,6 +1085,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       applyThemeAttribute,
       copyTextViaClipboardApi,
       copyTextViaExecCommand,
+      computeRenderShape,
     };
   }
 } else {
@@ -2590,15 +2606,11 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       thead.appendChild(headRow);
 
       const listAll = Array.isArray(visibleProblems) ? visibleProblems : getVisibleProblems();
-      const chunkSize = Math.max(
-        25,
-        Number.isFinite(config.tableRenderChunkSize) ? config.tableRenderChunkSize : 150
-      );
-      const shouldVirtualize =
-        config.virtualizeRows &&
-        Number.isFinite(config.virtualRowsLimit) &&
-        listAll.length > config.virtualRowsLimit;
-      const list = shouldVirtualize ? listAll.slice(0, config.virtualRowsLimit) : listAll;
+      const { chunkSize, shouldVirtualize, list } = computeRenderShape(listAll, {
+        tableRenderChunkSize: config.tableRenderChunkSize,
+        virtualizeRows: config.virtualizeRows,
+        virtualRowsLimit: config.virtualRowsLimit,
+      });
       const scheduleChunk =
         typeof window.requestAnimationFrame === 'function'
           ? window.requestAnimationFrame.bind(window)
