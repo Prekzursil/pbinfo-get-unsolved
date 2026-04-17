@@ -1425,6 +1425,47 @@ test('iife-harness: overlay=true + closeOverlay exercise the overlay teardown br
   await drainMicrotasks(4);
 });
 
+test('iife-harness: id-range score-batch with tried score (< 100) hits stats.tried++ branch', async () => {
+  // scor=50 -> status='tried' in processIdRangeFromScoreBatch, exercising
+  // the else stats.tried++ branch at L3632.
+  const batchPayload = JSON.stringify({
+    data: [{ id_problema: 8, scor: '50' }],
+  });
+  let call = 0;
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'id-range',
+      PBINFO_GET_UNSOLVED_ID_START: 8,
+      PBINFO_GET_UNSOLVED_ID_END: 8,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: true,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH_SIZE: 200,
+      PBINFO_GET_UNSOLVED_ID_LOG_EVERY: 1,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+    },
+  });
+  window.fetch = () => {
+    call += 1;
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      text: async () => (call === 1 ? batchPayload : ''),
+    });
+  };
+  ctx.fetch = window.fetch;
+  await startAndDrain(ctx, window, 12);
+  try {
+    window.stopScan?.('harness');
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 4; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
 test('iife-harness: id-range score-batch success path exercises fetchIdRangeScoreBatch + processIdRangeFromScoreBatch', async () => {
   // scor=100 so processIdRangeFromScoreBatch's short-circuit path runs
   // (it only kicks in when the cached score is a full solve).
