@@ -1040,6 +1040,32 @@ test('iife-harness: deleteSnapshotItem with throwing index write hits failure lo
   sel?.__restoreProto?.();
 });
 
+test('iife-harness: saveSnapshotItem with throwing index write covers failure rollback', async () => {
+  const { ctx, window } = buildShortScanContext();
+  await startAndDrain(ctx, window, 4);
+  // Swap setItem to fail for index writes only, AFTER init so scan UI exists.
+  const realSet = window.localStorage.setItem.bind(window.localStorage);
+  window.localStorage.setItem = (k, v) => {
+    if (typeof k === 'string' && k.includes('state-index')) {
+      const err = new Error('QuotaExceededError');
+      err.name = 'QuotaExceededError';
+      throw err;
+    }
+    return realSet(k, v);
+  };
+  runHarnessScript(
+    `
+    (() => {
+      const btn = Array.from(document.querySelectorAll('button'))
+        .find((b) => (b.textContent || '').trim() === 'Snapshot');
+      if (btn) btn.dispatchEvent(new window.Event('click', { bubbles: true }));
+    })();
+  `,
+    ctx
+  );
+  await drainMicrotasks(4);
+});
+
 test('iife-harness: pruneSnapshotIndex evicts past max=8 snapshots on save', async () => {
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
