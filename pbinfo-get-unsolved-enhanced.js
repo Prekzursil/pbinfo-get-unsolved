@@ -769,6 +769,36 @@ function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
   return base + Math.floor((id - base) / size) * size;
 }
 
+async function copyTextViaClipboardApi(navigator, value) {
+  if (!navigator?.clipboard?.writeText) return { attempted: false, error: null };
+  try {
+    await navigator.clipboard.writeText(value);
+    return { attempted: true, error: null };
+  } catch (err) {
+    return { attempted: true, error: err };
+  }
+}
+
+function copyTextViaExecCommand(document, value) {
+  if (!document) return false;
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = value;
+    ta.setAttribute('readonly', 'true');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    ta.style.left = '-1000px';
+    document.body.appendChild(ta);
+    ta.focus?.();
+    ta.select?.();
+    const ok = typeof document.execCommand === 'function' ? document.execCommand('copy') : false;
+    ta.remove?.();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 function resolveThemeValue(raw) {
   if (raw === 'light' || raw === 'dark' || raw === 'system') return raw;
   return 'system';
@@ -1038,6 +1068,8 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       resolveThemeValue,
       loadStoredTheme,
       applyThemeAttribute,
+      copyTextViaClipboardApi,
+      copyTextViaExecCommand,
     };
   }
 } else {
@@ -1658,26 +1690,11 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
 
     async function copyTextToClipboard(text) {
       const value = String(text || '');
-      let clipboardApiError = null;
-      if (navigator?.clipboard?.writeText) {
-        try {
-          await navigator.clipboard.writeText(value);
-          return { method: 'clipboard-api' };
-        } catch (err) {
-          clipboardApiError = err;
-        }
-      }
-      const ta = document.createElement('textarea');
-      ta.value = value;
-      ta.setAttribute('readonly', 'true');
-      ta.style.position = 'fixed';
-      ta.style.top = '-1000px';
-      ta.style.left = '-1000px';
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      const ok = document.execCommand('copy');
-      ta.remove();
+      const apiRes = await copyTextViaClipboardApi(navigator, value);
+      if (apiRes.attempted && !apiRes.error) return { method: 'clipboard-api' };
+      const clipboardApiError = apiRes.error;
+
+      const ok = copyTextViaExecCommand(document, value);
       if (ok) return { method: 'execCommand', clipboardApiError };
 
       const error = new Error('Clipboard copy failed');
