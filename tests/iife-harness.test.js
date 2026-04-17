@@ -1123,6 +1123,9 @@ test('iife-harness: snapshot with deferred/pageQueue/nextSequentialPage exercise
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
   window.confirm = () => true;
   ctx.confirm = window.confirm;
+  // Override prompt to return our listUrl so stateKeys match what's seeded.
+  window.prompt = () => listUrl;
+  ctx.prompt = window.prompt;
   await startAndDrain(ctx, window, 8);
 });
 
