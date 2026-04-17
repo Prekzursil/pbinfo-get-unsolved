@@ -8,14 +8,24 @@ post-v3.0.0.
 
 ## High priority
 
-- [ ] Drive branch + line coverage on `pbinfo-get-unsolved-enhanced.js` from
-      the current 95/19 pair to a full 100/100 without exclusions. Strategy:
-      incrementally promote pure helpers out of the IIFE (as done for
-      `buildStateKeys`), or exercise the IIFE under a linkedom-backed DOM
-      harness.
+- [ ] Drive branch + line coverage on `pbinfo-get-unsolved-enhanced.js`
+      from the current 99.17 / 89.40 pair to a full 100/100 without
+      exclusions. Remaining uncovered lines are concentrated in: (i)
+      defensive storage-failure branches (`saveScanState`, `deleteSnapshotItem`);
+      (ii) `restoreFromSavedState` active-request abort loop that only fires
+      when `activeRequests.size > 0 && inFlight === 0` (not normally
+      reachable); (iii) `DEBUG_IDS` .map/.filter chain (adding a test
+      regresses unrelated coverage by ~1%); (iv) list-mode past-end
+      (`startOffset >= totalProblems`) which also regresses when added.
 - [ ] Verify each Quality Zero gate (Codacy, SonarCloud, QLTY, Semgrep,
       DeepSource, CodeQL, Codecov) reports 0 issues on the v3 PR, not just a
-      green check rollup.
+      green check rollup. Current status (PR #13): - PASS: test, CodeQL, DeepScan, DeepSource Visible Zero, Semgrep
+      Zero, Sentry Zero, QLTY Zero, Quality Secrets Preflight, SonarCloud
+      status check, Codecov Analytics, Dependency Alerts, Socket Security - FAIL: SonarCloud Code Analysis (3 hotspots + 3.6% duplication on
+      new code, threshold ≤3%); qlty check (20 blocking: 12 duplication,
+      4 deeply-nested flow, 3 many-returns, 1 total complexity);
+      Codacy Static Analysis (100 issues; mostly Compatibility +
+      ErrorProne, under investigation); Coverage 100 Gate (requires 100%).
 - [ ] Cut `v3.0.0` release with attached `dist/*.userscript.js`,
       `dist/*.bookmarklet.txt`, `dist/*chrome*.zip`, `dist/*firefox*.xpi`,
       and `dist/checksums.sha256`.
