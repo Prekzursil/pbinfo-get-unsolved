@@ -177,12 +177,13 @@ function buildContext({ modeOverrides = {}, fetchResponse } = {}) {
   window.confirm = () => false;
   window.alert = () => {};
 
-  // Navigator stubs (linkedom may or may not expose one; spread-guard with
-  // a non-empty fallback to avoid Sonar S4158).
-  const existingNavigator = window.navigator || { userAgent: 'linkedom' };
-  window.navigator = {
-    ...existingNavigator,
-    clipboard: { writeText: async () => {} },
+  // Navigator stubs — linkedom's window.navigator is a non-configurable
+  // getter, so our override won't stick on the window. We pass the stub
+  // straight into the vm context below (the IIFE reads `navigator` from
+  // there). Default navigator has no clipboard — the `navigator?.clipboard?
+  // .writeText` guard in copyTextToClipboard therefore takes the fallback
+  // branch (execCommand) on every harness click, which is what we want.
+  const navigatorStub = {
     userAgent: 'node-harness/1.0',
   };
   window.isSecureContext = true;
@@ -217,7 +218,7 @@ function buildContext({ modeOverrides = {}, fetchResponse } = {}) {
     requestAnimationFrame: window.requestAnimationFrame,
     cancelAnimationFrame: window.cancelAnimationFrame,
     fetch: window.fetch,
-    navigator: window.navigator,
+    navigator: navigatorStub,
     URL: URL,
     URLSearchParams: URLSearchParams,
     localStorage: window.localStorage,
@@ -790,14 +791,12 @@ test('iife-harness: copyTextToClipboard fallback branches via clipboard-throws +
   window.confirm = () => true;
   ctx.confirm = window.confirm;
   // clipboard API throws, execCommand returns true — covers the
-  // execCommand-success branch of copyTextToClipboard.
-  // The navigator reference is shared between window, ctx, and the
-  // library's bare `navigator`; replace its clipboard in place.
-  ctx.navigator.clipboard = {
-    writeText: async () => {
-      throw new Error('denied');
-    },
-  };
+  // execCommand-success branch of copyTextToClipboard. Apply the mutation
+  // inside the vm so the bare `navigator` binding sees it.
+  vm.runInContext(
+    "globalThis.navigator = { clipboard: { writeText: async () => { throw new Error('denied'); } }, userAgent: 'test' };",
+    ctx
+  );
   Object.defineProperty(document, 'execCommand', { value: () => true, configurable: true });
   await startAndDrain(ctx, window, 4);
   // Click every button so copyLinks/copyIds/copyMarkdown fire.
@@ -834,13 +833,10 @@ test('iife-harness: copyTextToClipboard fully-failed fallback → describeClipbo
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
   window.confirm = () => true;
   ctx.confirm = window.confirm;
-  window.navigator.clipboard = {
-    writeText: async () => {
-      const err = new Error('denied');
-      err.name = 'NotAllowedError';
-      throw err;
-    },
-  };
+  vm.runInContext(
+    "globalThis.navigator = { clipboard: { writeText: async () => { const e = new Error('denied'); e.name = 'NotAllowedError'; throw e; } }, userAgent: 'test' };",
+    ctx
+  );
   Object.defineProperty(document, 'execCommand', { value: () => false, configurable: true });
   await startAndDrain(ctx, window, 4);
   const buttons = Array.from(document.querySelectorAll('button'));
