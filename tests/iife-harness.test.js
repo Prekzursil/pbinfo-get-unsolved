@@ -1219,6 +1219,9 @@ test('iife-harness: id-range problem page missing #scor_utilizator_problema logs
 });
 
 test('iife-harness: id-range with debug enabled exercises the problem-page debug dump', async () => {
+  // Score cell contains a "Punctaj maxim" badge so the candidates array
+  // is non-empty but the status resolves to "unattempted" — that drives
+  // the candidates.map(...) body inside the id-range debug logger.
   const problemPage = `<!doctype html><html><body>
     <h1>#7 Demo</h1>
     <table>
@@ -1227,7 +1230,9 @@ test('iife-harness: id-range with debug enabled exercises the problem-page debug
         <td>-</td>
         <td>-</td>
         <td>Mediu</td>
-        <td id="scor_utilizator_problema"></td>
+        <td id="scor_utilizator_problema">
+          <span class="badge" title="Punctaj maxim">100p</span>
+        </td>
       </tr>
     </table>
   </body></html>`;
