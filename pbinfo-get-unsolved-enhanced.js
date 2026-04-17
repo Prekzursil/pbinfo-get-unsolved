@@ -3661,33 +3661,8 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       stats.pages++;
       idRangeConsecutiveMissing = 0;
 
-      const userScore = scoreValue;
-      const maxScore = 100;
-      const status = userScore >= maxScore ? 'solved' : 'tried';
-
-      if (!seenProblemIds.has(problemId)) {
-        seenProblemIds.add(problemId);
-        allProblems.push({
-          cnt: allProblems.length + 1,
-          id: problemId,
-          name: '',
-          link: new URL(
-            `/probleme/${problemId}`,
-            location?.origin || 'https://www.pbinfo.ro'
-          ).toString(),
-          difficulty: 3,
-          score: userScore,
-          scoreKnown: true,
-          userScore,
-          maxScore,
-          status,
-          postedBy_link: '',
-          postedBy_name: '',
-          postedBy_img: '',
-          author: '',
-          source: '',
-        });
-
+      const status = scoreValue >= 100 ? 'solved' : 'tried';
+      if (addIdRangeProblemEntry(problemId, scoreValue)) {
         if (status === 'solved') stats.solved++;
         else stats.tried++;
         stats.total++;
