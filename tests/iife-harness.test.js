@@ -1134,11 +1134,7 @@ test('iife-harness: loadStateBtn with no saved state hits the no-snapshot log', 
 
 test('iife-harness: overlay=true + closeOverlay exercise the overlay teardown branch', async () => {
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: null,
     modeOverrides: {
       PBINFO_GET_UNSOLVED_OVERLAY: true,
       PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
@@ -1146,14 +1142,25 @@ test('iife-harness: overlay=true + closeOverlay exercise the overlay teardown br
       PBINFO_GET_UNSOLVED_DELAY_MS: 0,
     },
   });
+  // Hanging fetch so scan is not finished when we click "Închide overlay" —
+  // exercises the `!finished && !stopRequested` guard (L2141) and the
+  // confirm + stopScan cascade in closeOverlay (L2142-2144).
+  window.fetch = () => new Promise(() => {});
+  ctx.fetch = window.fetch;
   window.confirm = () => true;
   ctx.confirm = window.confirm;
   await startAndDrain(ctx, window, 4);
-  try {
-    window.closeOverlay?.();
-  } catch {
-    /* ignore */
-  }
+  vm.runInContext(
+    `
+    (() => {
+      const btn = Array.from(document.querySelectorAll('button'))
+        .find((b) => (b.textContent || '').trim() === 'Închide overlay');
+      if (btn) btn.dispatchEvent(new window.Event('click', { bubbles: true }));
+    })();
+  `,
+    ctx
+  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  await drainMicrotasks(4);
 });
 
 test('iife-harness: id-range score-batch success path exercises fetchIdRangeScoreBatch + processIdRangeFromScoreBatch', async () => {
