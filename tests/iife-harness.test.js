@@ -329,14 +329,108 @@ test('iife-harness: id-range scan against a /probleme/N problem page drains', as
   }
 });
 
-test('iife-harness: pre-seeded snapshot in localStorage triggers restoreFromSavedState', async () => {
+test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persistence helpers', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+
+  // Seed a full snapshot AND a snapshot-index item so loadSnapshotIndex +
+  // pruneSnapshotIndex + loadSnapshotItem get exercised by the load
+  // button click.
+  const savedAt = Date.now() - 5000;
+  const indexItem = {
+    id: 'seed',
+    savedAt,
+    storageLevel: 'full',
+    label: 'test',
+    storageVersion: 2,
+  };
+  const snapshot = {
+    version: 2,
+    schemaVersion: 2,
+    storageLevel: 'full',
+    savedAt,
+    pageLink: listUrl,
+    scanMode: 'list',
+    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
+    scanStartPage: 1,
+    pageQueue: [],
+    deferred: [],
+    inFlightPages: [],
+    seenProblemIds: [42],
+    problems: [
+      {
+        id: 42,
+        name: 'Seed problem',
+        link: '/probleme/42/seed',
+        difficulty: 1,
+        status: 'tried',
+        userScore: 50,
+        maxScore: 100,
+      },
+    ],
+    stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
+  };
+  const { ctx, window, document } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
+  window.localStorage.setItem(keys.index, JSON.stringify([indexItem]));
+  window.localStorage.setItem(`${keys.itemPrefix}seed`, JSON.stringify(snapshot));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  // prompt returns the list URL on first call, "seed" on second (for
+  // the snapshot picker), then null to bail out of further prompts.
+  let promptCalls = 0;
+  const promptReplies = [listUrl, 'seed'];
+  window.prompt = () => promptReplies[promptCalls++] ?? null;
+  ctx.prompt = window.prompt;
+  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
+  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 8; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+  // After init, click every button to exercise load/save/clear/export/import
+  // snapshot handlers against the pre-seeded state.
+  const controls = Array.from(document.querySelectorAll('button, select'));
+  for (const ctrl of controls) {
+    try {
+      if (ctrl.tagName === 'SELECT') {
+        ctrl.value = 'dark';
+        ctrl.dispatchEvent(new window.Event('change', { bubbles: true }));
+      } else {
+        ctrl.dispatchEvent(new window.Event('click', { bubbles: true }));
+      }
+    } catch {
+      /* best effort */
+    }
+  }
+  for (let i = 0; i < 4; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
+test('iife-harness: original pre-seeded snapshot triggers restoreFromSavedState', async () => {
   // Pre-populate a v2 snapshot for the default list URL. When the scanner
   // starts it will see the stored state and offer to restore, which we
   // auto-accept via confirm() returning true.
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
-  const { buildStateKeys, fnv1a32 } = require('../pbinfo-get-unsolved-enhanced.js');
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
   const keys = buildStateKeys(listUrl);
-  void fnv1a32;
   const snapshot = {
     version: 2,
     schemaVersion: 2,
