@@ -28,5 +28,16 @@ module.exports = [
       'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
   },
+  {
+    files: ['extension/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.webextensions,
+        browser: 'readonly',
+        chrome: 'readonly',
+      },
+    },
+  },
   eslintConfigPrettier,
 ];

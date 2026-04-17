@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ro">
+  <head>
+    <meta charset="utf-8" />
+    <title>pbinfo-get-unsolved</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>pbinfo-get-unsolved</h1>
+      <p class="subtitle" id="subtitle">Deschide o pagină pbinfo.ro, apoi apasă <b>Start scan</b>.</p>
+    </header>
+
+    <main>
+      <button id="start" type="button" disabled>Start scan</button>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </main>
+
+    <footer>
+      <a href="https://github.com/Prekzursil/pbinfo-get-unsolved" target="_blank" rel="noopener">
+        GitHub
+      </a>
+      <span class="version" id="version"></span>
+    </footer>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

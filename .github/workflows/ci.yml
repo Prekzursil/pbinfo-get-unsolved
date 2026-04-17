@@ -33,8 +33,19 @@ jobs:
       - name: Format check
         run: npm run format:check
 
-      - name: Build dist artifacts
-        run: npm run build:bookmarklet
+      - name: Build dist artifacts (userscript + extensions)
+        run: npm run build
+
+      - name: Upload extension artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-artifacts
+          path: |
+            dist/pbinfo-get-unsolved-chrome-*.zip
+            dist/pbinfo-get-unsolved-firefox-*.xpi
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload coverage artifact
         if: always()

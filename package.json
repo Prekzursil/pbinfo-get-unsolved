@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "build:bookmarklet": "node scripts/build-bookmarklet.cjs",
+    "build:icons": "node scripts/generate-icons.cjs",
+    "build:extension": "node scripts/generate-icons.cjs && node scripts/build-extension.cjs",
+    "build": "npm run build:bookmarklet && npm run build:extension",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",

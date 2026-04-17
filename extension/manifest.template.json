@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "pbinfo-get-unsolved",
+  "short_name": "pbinfo-scan",
+  "version": "__VERSION__",
+  "description": "Scan pbinfo.ro for unsolved problems (list + ID range) and export the results.",
+  "homepage_url": "https://github.com/Prekzursil/pbinfo-get-unsolved",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "pbinfo-get-unsolved",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "scripts": ["background/service-worker.js"]
+  },
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": ["https://www.pbinfo.ro/*", "https://pbinfo.ro/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://www.pbinfo.ro/*", "https://pbinfo.ro/*"],
+      "js": ["content/pbinfo-get-unsolved.content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["content/pbinfo-get-unsolved.content.js"],
+      "matches": ["https://www.pbinfo.ro/*", "https://pbinfo.ro/*"]
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "pbinfo-get-unsolved@prekzursil",
+      "strict_min_version": "115.0"
+    }
+  }
+}
