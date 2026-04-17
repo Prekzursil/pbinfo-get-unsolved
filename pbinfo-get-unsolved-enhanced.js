@@ -746,6 +746,43 @@ function toggleSortedState(sorted, type) {
   return sorted;
 }
 
+function formatRetryDelayLabel(delayMs) {
+  const ms = Number.isFinite(delayMs) ? Math.max(0, delayMs) : 0;
+  return `${(ms / 1000).toFixed(ms >= 1000 ? 1 : 2)}s`;
+}
+
+function parseIdRangeScoreValue(raw) {
+  const text = typeof raw === 'string' ? raw.trim().replace(/\s+/g, ' ') : '';
+  if (!text || text === '-') return { value: null, raw: '-' };
+  const n = parseInt(text, 10);
+  return Number.isFinite(n) ? { value: n, raw: text } : { value: null, raw: text };
+}
+
+function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
+  if (!Number.isFinite(id)) return null;
+  const base = Number.isFinite(startId) ? startId : 1;
+  const size = Number.isFinite(batchSize) ? batchSize : 200;
+  if (id < base || size <= 0) return null;
+  return base + Math.floor((id - base) / size) * size;
+}
+
+function serializeFilterState(filterState) {
+  const fs = filterState && typeof filterState === 'object' ? filterState : {};
+  const statuses =
+    fs.statuses instanceof Set
+      ? Array.from(fs.statuses)
+      : Array.isArray(fs.statuses)
+        ? fs.statuses.slice()
+        : [];
+  return {
+    statuses,
+    includeUnknownScore: Boolean(fs.includeUnknownScore),
+    scoreMin: Number.isFinite(fs.scoreMin) ? fs.scoreMin : null,
+    scoreMax: Number.isFinite(fs.scoreMax) ? fs.scoreMax : null,
+    searchQuery: typeof fs.searchQuery === 'string' ? fs.searchQuery : '',
+  };
+}
+
 function filterProblems(problems, filterState) {
   const list = Array.isArray(problems) ? problems : [];
   const state = filterState && typeof filterState === 'object' ? filterState : {};
@@ -812,6 +849,10 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       quicksortPartition,
       toggleSortedState,
       filterProblems,
+      formatRetryDelayLabel,
+      parseIdRangeScoreValue,
+      idRangeBatchStartForId,
+      serializeFilterState,
     };
   }
 } else {
@@ -2822,13 +2863,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
     }
 
     function serializeFilters() {
-      return {
-        statuses: Array.from(filterState.statuses),
-        includeUnknownScore: Boolean(filterState.includeUnknownScore),
-        scoreMin: Number.isFinite(filterState.scoreMin) ? filterState.scoreMin : null,
-        scoreMax: Number.isFinite(filterState.scoreMax) ? filterState.scoreMax : null,
-        searchQuery: typeof filterState.searchQuery === 'string' ? filterState.searchQuery : '',
-      };
+      return serializeFilterState(filterState);
     }
 
     function serializeSorted() {
@@ -3099,25 +3134,13 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       return parser.parseFromString(String(responseText || ''), 'text/html');
     }
 
-    function getRetryDelayLabel(delayMs) {
-      return `${(delayMs / 1000).toFixed(delayMs >= 1000 ? 1 : 2)}s`;
-    }
-
-    function parseIdRangeScoreValue(raw) {
-      const t = normalizeSpace(raw);
-      if (!t || t === '-') return { value: null, raw: '-' };
-      const n = parseInt(t, 10);
-      return Number.isFinite(n) ? { value: n, raw: t } : { value: null, raw: t };
-    }
+    const getRetryDelayLabel = formatRetryDelayLabel;
 
     function idRangeScoreBatchStartForId(id) {
-      if (!Number.isFinite(id)) return null;
-      const startId = Number.isFinite(config.idRange.startId) ? config.idRange.startId : 1;
-      const size = Number.isFinite(config.idRange.scoreBatch?.size)
-        ? config.idRange.scoreBatch.size
-        : 200;
-      if (id < startId || size <= 0) return null;
-      return startId + Math.floor((id - startId) / size) * size;
+      return idRangeBatchStartForId(id, {
+        startId: config.idRange.startId,
+        batchSize: config.idRange.scoreBatch?.size,
+      });
     }
 
     function fetchIdRangeScoreBatch(batchStart, retryCount = 0) {
