@@ -769,6 +769,19 @@ function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
   return base + Math.floor((id - base) / size) * size;
 }
 
+function parseHtmlDocument(responseText, { ParserClass } = {}) {
+  const ctor =
+    ParserClass ||
+    (typeof DOMParser === 'undefined'
+      ? typeof globalThis.DOMParser === 'undefined'
+        ? null
+        : globalThis.DOMParser
+      : DOMParser);
+  if (!ctor) return null;
+  const parser = new ctor();
+  return parser.parseFromString(String(responseText || ''), 'text/html');
+}
+
 function shouldEmitDebugDump(id, { enabled = false, dumped = 0, limit = 1, ids = null } = {}) {
   if (!enabled) return false;
   if (dumped >= limit) return false;
@@ -988,6 +1001,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       statusColor,
       shouldEmitDebugDump,
       describeClipboardError,
+      parseHtmlDocument,
     };
   }
 } else {
@@ -3206,10 +3220,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       else fn();
     }
 
-    function parseHtmlDocument(responseText) {
-      const parser = new DOMParser();
-      return parser.parseFromString(String(responseText || ''), 'text/html');
-    }
+    const parseHtmlDocumentLocal = (responseText) => parseHtmlDocument(responseText);
 
     const getRetryDelayLabel = formatRetryDelayLabel;
 
@@ -3756,7 +3767,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
             stats.pages++;
             idRangeConsecutiveMissing = 0;
 
-            const pageDoc = parseHtmlDocument(responseText);
+            const pageDoc = parseHtmlDocumentLocal(responseText);
 
             const canonicalAttr = pageDoc
               .querySelector('link[rel="canonical"]')
@@ -3866,7 +3877,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
             return;
           }
 
-          const pageDoc = parseHtmlDocument(responseText);
+          const pageDoc = parseHtmlDocumentLocal(responseText);
           const cards = pageDoc.querySelectorAll('div.card.mb-3');
 
           if (pageIndex === firstFetchedPageIndex) {
