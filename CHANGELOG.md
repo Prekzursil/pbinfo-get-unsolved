@@ -33,7 +33,15 @@ _Nothing yet. See v3.0.0 for the current release._
   `parseIdRangeScoreValue`, `idRangeBatchStartForId`,
   `serializeFilterState`, `storageGetJson`, `storageSetJson`,
   `storageRemove`, `effectiveDelayMs`, `effectiveConcurrency`,
-  `resolveThemeValue`, `loadStoredTheme`, `applyThemeAttribute`.
+  `resolveThemeValue`, `loadStoredTheme`, `applyThemeAttribute`,
+  `copyTextViaClipboardApi`, `copyTextViaExecCommand`, `computeRenderShape`,
+  `computeScanSummary`, `computeEta`, `formatProgressText`,
+  `formatVirtualizationBanner`, `formatIdRangeProgressLog`,
+  `formatFetchRetryLog`, `redactScoreCandidates`, `safePbinfoFetchUrl`,
+  `resolveSnapshotLevels`, `problemMatchesSearch`, `problemMatchesScore`.
+- **In-IIFE refactor helpers** that reduce duplication for qlty /
+  SonarCloud (no behavior change): `maybeLogIdRangeProgress`,
+  `handleCloudflareBlock`, `addIdRangeProblemEntry`.
 - **Linkedom-backed DOM harness** (`tests/iife-harness.test.js`) that boots
   the browser IIFE under a Node-side window stub to exercise DOM-bound
   handlers without shipping the code as a separate module.
