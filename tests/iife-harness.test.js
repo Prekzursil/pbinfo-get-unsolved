@@ -1409,6 +1409,65 @@ test('iife-harness: filter inputs + quota-throwing storage trigger requestRender
   }
 });
 
+test('iife-harness: import JSON + quota-throwing storage → import failed branch', async () => {
+  const importable = {
+    version: 2,
+    schemaVersion: 2,
+    storageLevel: 'full',
+    savedAt: Date.now(),
+    pageLink: 'https://www.pbinfo.ro/?pagina=probleme-lista',
+    scanMode: 'list',
+    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
+    scanStartPage: 1,
+    pageQueue: [],
+    deferred: [],
+    inFlightPages: [],
+    seenProblemIds: [],
+    problems: [],
+    stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
+  };
+  const { ctx, window, document } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  // Storage setItem always throws so saveImportedSnapshot fails for every
+  // level it tries — this hits the !res.ok branch of the import handler.
+  window.localStorage.setItem = () => {
+    const e = new Error('quota');
+    e.name = 'QuotaExceededError';
+    throw e;
+  };
+  ctx.localStorage = window.localStorage;
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  await startAndDrain(ctx, window, 4);
+  const inputs = Array.from(document.querySelectorAll('input[type="file"]'));
+  for (const input of inputs) {
+    const stubFile = {
+      name: 'snapshot.json',
+      text: async () => JSON.stringify(importable),
+    };
+    Object.defineProperty(input, 'files', {
+      value: [stubFile],
+      configurable: true,
+    });
+    try {
+      input.dispatchEvent(new window.Event('change', { bubbles: true }));
+    } catch {
+      /* best effort */
+    }
+  }
+  await drainMicrotasks(6);
+});
+
 test('iife-harness: import JSON flow with a stubbed file triggers saveImportedSnapshot', async () => {
   const importable = {
     version: 2,
