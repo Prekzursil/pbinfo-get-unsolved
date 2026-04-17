@@ -375,12 +375,15 @@ function migrateStateSnapshotToV2(snapshot) {
   if (!snapshot || typeof snapshot !== 'object') return null;
 
   const src = snapshot;
-  const storageLevel =
-    src.storageLevel === 'full' || src.storageLevel === 'minimal' || src.storageLevel === 'progress'
-      ? src.storageLevel
-      : Array.isArray(src.problems)
-        ? 'minimal'
-        : 'progress';
+  const explicitLevels = new Set(['full', 'minimal', 'progress']);
+  let storageLevel;
+  if (explicitLevels.has(src.storageLevel)) {
+    storageLevel = src.storageLevel;
+  } else if (Array.isArray(src.problems)) {
+    storageLevel = 'minimal';
+  } else {
+    storageLevel = 'progress';
+  }
 
   const out = { ...src };
   out.version = 2;
@@ -752,9 +755,9 @@ function formatRetryDelayLabel(delayMs) {
 }
 
 function parseIdRangeScoreValue(raw) {
-  const text = typeof raw === 'string' ? raw.trim().replace(/\s+/g, ' ') : '';
+  const text = typeof raw === 'string' ? raw.trim().replaceAll(/\s+/g, ' ') : '';
   if (!text || text === '-') return { value: null, raw: '-' };
-  const n = parseInt(text, 10);
+  const n = Number.parseInt(text, 10);
   return Number.isFinite(n) ? { value: n, raw: text } : { value: null, raw: text };
 }
 
@@ -764,6 +767,18 @@ function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
   const size = Number.isFinite(batchSize) ? batchSize : 200;
   if (id < base || size <= 0) return null;
   return base + Math.floor((id - base) / size) * size;
+}
+
+function sanitizeForDebugLog(value, maxLength = 200) {
+  if (value == null) return '';
+  const text = typeof value === 'string' ? value : String(value);
+  // Drop control chars (including the escape char commonly used in ANSI
+  // sequences and anything else that could let scraped content forge log
+  // lines) and cap the length so a huge HTML body can't flood the console.
+  // eslint-disable-next-line no-control-regex -- intentional: strip control chars from scraped data.
+  const cleaned = text.replaceAll(/[\u0000-\u001f\u007f]/g, ' ');
+  const cap = Number.isFinite(maxLength) && maxLength > 0 ? maxLength : 200;
+  return cleaned.length > cap ? `${cleaned.slice(0, cap)}…` : cleaned;
 }
 
 function projectSnapshotForLevel(snapshot, level, { pageLink, schemaVersion = 2 } = {}) {
@@ -918,6 +933,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       storageSetJson,
       storageRemove,
       projectSnapshotForLevel,
+      sanitizeForDebugLog,
     };
   }
 } else {
@@ -3501,19 +3517,29 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       };
       const effectivePageSize = Number.isFinite(pageSize) ? pageSize : 10;
       const startOffset = scanMode === 'list' ? effectivePageSize * (pageIndex - 1) : null;
-      const url =
-        scanMode === 'id-range'
-          ? new URL(
-              `/probleme/${pageIndex}`,
-              location?.origin || 'https://www.pbinfo.ro'
-            ).toString()
-          : buildPageUrl(pageLink, {
-              pageIndex,
-              pageSize: effectivePageSize,
-              mode: config.pagination.mode,
-              param: config.pagination.param,
-              pageBase: config.pagination.pageBase,
-            });
+      let url;
+      if (scanMode === 'id-range') {
+        // Guard against Sonar S5144: coerce pageIndex to a positive integer
+        // before it ever reaches URL construction — even though it flows from
+        // our own validated config.idRange, we want the assertion to be local.
+        const safeId = Math.trunc(Number(pageIndex));
+        if (!Number.isFinite(safeId) || safeId < 1) {
+          finalize();
+          return;
+        }
+        url = new URL(
+          `/probleme/${safeId}`,
+          location?.origin || 'https://www.pbinfo.ro'
+        ).toString();
+      } else {
+        url = buildPageUrl(pageLink, {
+          pageIndex,
+          pageSize: effectivePageSize,
+          mode: config.pagination.mode,
+          param: config.pagination.param,
+          pageBase: config.pagination.pageBase,
+        });
+      }
       fetch(url, {
         method: 'GET',
         signal: controller.signal,
@@ -3734,17 +3760,32 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
                 (scoreInfo.candidates.length === 0 || status === 'unattempted')
               ) {
                 debugDumped++;
+                // Sanitize all scraped fields before logging — Sonar S5247:
+                // the raw response is "user-controlled" from its POV.
+                const redactedName = sanitizeForDebugLog(meta.name, 120);
+                const redactedLink = sanitizeForDebugLog(link, 200);
+                const redactedCandidates = scoreInfo.candidates.map((c) => ({
+                  tooltip: sanitizeForDebugLog(c.tooltip, 80),
+                  text: sanitizeForDebugLog(c.text, 80),
+                  value: Number.isFinite(c.value) ? c.value : null,
+                  max: Number.isFinite(c.max) ? c.max : null,
+                  hasRatio: Boolean(c.hasRatio),
+                  isLink: Boolean(c.isLink),
+                }));
                 console.log('pbinfo-get-unsolved debug problem page:', {
-                  id: pageIndex,
-                  name: meta.name,
-                  link,
-                  scoreInfo: { userScore: scoreInfo.userScore, maxScore: scoreInfo.maxScore },
-                  candidates: scoreInfo.candidates,
+                  id: Number.isFinite(pageIndex) ? Math.trunc(pageIndex) : null,
+                  name: redactedName,
+                  link: redactedLink,
+                  scoreInfo: {
+                    userScore: Number.isFinite(scoreInfo.userScore) ? scoreInfo.userScore : null,
+                    maxScore: Number.isFinite(scoreInfo.maxScore) ? scoreInfo.maxScore : null,
+                  },
+                  candidates: redactedCandidates,
                 });
                 if (debugIncludeHtml) {
                   console.log(
                     'pbinfo-get-unsolved debug problem html:',
-                    responseText.slice(0, 5000)
+                    sanitizeForDebugLog(responseText, 5000)
                   );
                 }
               }
