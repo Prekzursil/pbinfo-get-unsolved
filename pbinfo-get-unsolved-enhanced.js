@@ -2166,7 +2166,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       if (paused) {
         ensureResultsAttached();
         renderResults();
-        saveScanState({ mode: 'full', reason: 'pause', silent: true });
+        saveScanState({ mode: 'full', reason: 'pause' });
       }
       updateProgress(inFlight);
       if (!paused) {
@@ -2423,7 +2423,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
         const label = prompt('Etichetă snapshot (opțional):', '');
         if (label === null) return;
         // update "latest" state too (for quick restore)
-        saveScanState({ mode: 'full', reason: 'manual', silent: true });
+        saveScanState({ mode: 'full', reason: 'manual' });
         const res = saveSnapshotItem({
           mode: 'full',
           label: normalizeSpace(label),
@@ -2915,7 +2915,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
         addLog(
           `<u>Am terminat de extras problemele.</u> Sunt ${unsolvedCount} probleme nerezolvate. Tabelul și lista au fost adăugate mai jos.`
         );
-        saveScanState({ mode: 'full', reason: 'complete', silent: true });
+        saveScanState({ mode: 'full', reason: 'complete' });
         return;
       }
 
@@ -2923,7 +2923,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       addLog(
         `<span style="color:#b30000;"><u>Scanarea s-a oprit înainte de final.</u></span>${reasonText}`
       );
-      saveScanState({ mode: 'full', reason: 'stopped', silent: true });
+      saveScanState({ mode: 'full', reason: 'stopped' });
     }
 
     // Fetch pages (optional concurrency)
@@ -3237,7 +3237,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       return snapshot;
     }
 
-    function saveScanState({ mode, reason, silent } = {}) {
+    function saveScanState({ mode, reason } = {}) {
       const levels = resolveSnapshotLevels(mode, {
         progressOnly: storagePolicy.progressOnly,
       });
@@ -3248,9 +3248,6 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
         const writeRes = storageSetJson(key, snap);
         if (!writeRes.ok) {
           noteStorageFailure(writeRes.errorType, level);
-          if (!silent) {
-            console.warn(`Failed to save ${level} state:`, writeRes.errorType);
-          }
           continue;
         }
         if (level === 'full') storageRemove(stateKeys.minimal);
@@ -3428,7 +3425,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
         now - lastAutosaveAt < autosaveConfig.everyMs
       )
         return;
-      const res = saveScanState({ mode: 'progress', reason: reason || 'autosave', silent: true });
+      const res = saveScanState({ mode: 'progress', reason: reason || 'autosave' });
       if (!res.ok) {
         autosaveDisabled = true;
         addLog(
