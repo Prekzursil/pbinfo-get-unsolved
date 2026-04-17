@@ -961,6 +961,38 @@ test('iife-harness: list-mode status 500 response + no retries → finishScan er
   await startAndDrain(ctx, window, 6);
 });
 
+test('iife-harness: list-mode HTTP 500 with retries available → retry-setTimeout branch', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: false,
+      status: 500,
+      text: async () => 'ISE',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  await startAndDrain(ctx, window, 6);
+});
+
+test('iife-harness: invalid-request body with retries available → retry-setTimeout branch', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Invalid request</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  await startAndDrain(ctx, window, 6);
+});
+
 async function runScoreBatchScenario(firstResponse) {
   const { ctx, window } = buildContext({
     fetchResponse: null,
