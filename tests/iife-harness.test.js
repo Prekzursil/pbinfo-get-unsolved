@@ -846,12 +846,21 @@ test('iife-harness: id-range stopAfterMissing triggers automatic finishScan', as
   }
 });
 
-test('iife-harness: list scan with LIVE_RENDER=true + problem cards exercises maybeLiveRender', async () => {
+test('iife-harness: list scan with LIVE_RENDER=true + fully-decorated card exercises difficulty/postedBy parse + maybeLiveRender', async () => {
   const body = `<!doctype html><html><body>
     <div class="row">
       <div class="card mb-3">
         <code>#1</code>
         <a href="/probleme/1/test" class="text-dark"><h5>#1 test</h5></a>
+        <span title="Dificultate">Ușoară</span>
+        <span title="Postată de">
+          <a href="/utilizator/alice">
+            <img src="https://www.pbinfo.ro/pic.png?u=1&gsize=32"/>
+            alice
+          </a>
+        </span>
+        <span title="Autor">Bob</span>
+        <span title="Sursa problemei">OlimpInfo 2024</span>
         <div class="card-footer"><span class="badge" title="Punctaj obtinut">50</span></div>
       </div>
     </div>
