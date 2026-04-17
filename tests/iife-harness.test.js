@@ -1452,6 +1452,37 @@ test('iife-harness: virtualize rows + 200-problem snapshot displays the virtuali
   await drainMicrotasks(6);
 });
 
+test('iife-harness: pause then resume re-schedules kicks via togglePause !paused branch', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  // Hanging fetch so scan stays running (not finished / not stopped) and
+  // togglePause actually flips state.
+  window.fetch = () => new Promise(() => {});
+  ctx.fetch = window.fetch;
+  await startAndDrain(ctx, window, 4);
+  // Click Pauză twice -> first pauses, second resumes + schedules kick.
+  vm.runInContext(
+    `
+    (() => {
+      const btn = Array.from(document.querySelectorAll('button'))
+        .find((b) => (b.textContent || '').trim() === 'Pauză' || (b.textContent || '').trim() === 'Continuă');
+      if (btn) btn.dispatchEvent(new window.Event('click', { bubbles: true }));
+      const btn2 = Array.from(document.querySelectorAll('button'))
+        .find((b) => (b.textContent || '').trim() === 'Pauză' || (b.textContent || '').trim() === 'Continuă');
+      if (btn2) btn2.dispatchEvent(new window.Event('click', { bubbles: true }));
+    })();
+  `,
+    ctx
+  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  await drainMicrotasks(4);
+});
+
 test('iife-harness: restore with filter.scoreMin/Max seeds input.value at setupControls', async () => {
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
