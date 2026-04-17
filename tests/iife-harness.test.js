@@ -653,6 +653,49 @@ test('iife-harness: 200-problem restored snapshot triggers scheduleChunk + clear
   }
 });
 
+test('iife-harness: id-range with debug enabled exercises the problem-page debug dump', async () => {
+  const problemPage = `<!doctype html><html><body>
+    <h1>#7 Demo</h1>
+    <table>
+      <tr>
+        <td><a href="/user/x">Poster</a></td>
+        <td>-</td>
+        <td>-</td>
+        <td>Mediu</td>
+        <td id="scor_utilizator_problema"></td>
+      </tr>
+    </table>
+  </body></html>`;
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => problemPage,
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'id-range',
+      PBINFO_GET_UNSOLVED_ID_START: 7,
+      PBINFO_GET_UNSOLVED_ID_END: 7,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: false,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DEBUG: true,
+      PBINFO_GET_UNSOLVED_DEBUG_DUMP_LIMIT: 5,
+      PBINFO_GET_UNSOLVED_DEBUG_INCLUDE_HTML: true,
+    },
+  });
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 8; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
 test('iife-harness: id-range 403 forbidden response walks the forbidden-skip branch', async () => {
   const { ctx, window } = buildContext({
     fetchResponse: {
