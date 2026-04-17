@@ -28,6 +28,39 @@ function loadLibraryInto(ctx) {
   vm.runInContext(LIBRARY_SOURCE, ctx, { filename: LIBRARY_PATH }); // NOSONAR: javascript:S1523 — executing our own pinned library source (read once at module load) in an isolated vm context for branch-coverage purposes; never evaluates user input.
 }
 
+// Deterministic 200-problem snapshot builder used by a couple of coverage
+// harness scenarios. Extracted to keep Sonar's duplication metric under 3%.
+function makeLargeListSnapshot(listUrl) {
+  const problems = [];
+  for (let i = 0; i < 200; i++) {
+    problems.push({
+      id: i + 1,
+      name: `p${i + 1}`,
+      link: `/probleme/${i + 1}/x`,
+      difficulty: 1,
+      status: 'tried',
+      userScore: 50,
+      maxScore: 100,
+    });
+  }
+  return {
+    version: 2,
+    schemaVersion: 2,
+    storageLevel: 'full',
+    savedAt: Date.now(),
+    pageLink: listUrl,
+    scanMode: 'list',
+    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
+    scanStartPage: 1,
+    pageQueue: [],
+    deferred: [],
+    inFlightPages: [],
+    seenProblemIds: problems.map((p) => p.id),
+    problems,
+    stats: { solved: 0, tried: problems.length, unattempted: 0, total: problems.length, pages: 1 },
+  };
+}
+
 function buildContext({ modeOverrides = {}, fetchResponse } = {}) {
   const { window, document } = parseHTML(
     '<!doctype html><html><head><title>t</title></head><body></body></html>'
@@ -584,34 +617,7 @@ test('iife-harness: 200-problem restored snapshot triggers scheduleChunk + clear
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
   const keys = buildStateKeys(listUrl);
-  const problems = [];
-  for (let i = 0; i < 200; i++) {
-    problems.push({
-      id: i + 1,
-      name: `p${i + 1}`,
-      link: `/probleme/${i + 1}/x`,
-      difficulty: 1,
-      status: 'tried',
-      userScore: 50,
-      maxScore: 100,
-    });
-  }
-  const snapshot = {
-    version: 2,
-    schemaVersion: 2,
-    storageLevel: 'full',
-    savedAt: Date.now(),
-    pageLink: listUrl,
-    scanMode: 'list',
-    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
-    scanStartPage: 1,
-    pageQueue: [],
-    deferred: [],
-    inFlightPages: [],
-    seenProblemIds: problems.map((p) => p.id),
-    problems,
-    stats: { solved: 0, tried: problems.length, unattempted: 0, total: problems.length, pages: 1 },
-  };
+  const snapshot = makeLargeListSnapshot(listUrl);
   const { ctx, window, document } = buildContext({
     fetchResponse: {
       ok: true,
@@ -677,7 +683,7 @@ test('iife-harness: list-mode status 500 response + no retries → finishScan er
   }
 });
 
-test('iife-harness: id-range score-batch 500 response walks the batch-failed branch', async () => {
+async function runScoreBatchScenario(firstResponse) {
   const { ctx, window } = buildContext({
     fetchResponse: null,
     modeOverrides: {
@@ -694,10 +700,9 @@ test('iife-harness: id-range score-batch 500 response walks the batch-failed bra
   let call = 0;
   window.fetch = () => {
     call += 1;
-    // First = 500 score batch; subsequent = 404 so the scan terminates.
     return Promise.resolve(
       call === 1
-        ? { ok: false, status: 500, text: async () => 'Internal Server Error' }
+        ? firstResponse
         : { ok: false, status: 404, text: async () => '<body>Pagina nu exista.</body>' }
     );
   };
@@ -711,46 +716,22 @@ test('iife-harness: id-range score-batch 500 response walks the batch-failed bra
   for (let i = 0; i < 10; i++) {
     await new Promise((r) => setImmediate(r));
   }
+}
+
+test('iife-harness: id-range score-batch 500 response walks the batch-failed branch', async () => {
+  await runScoreBatchScenario({
+    ok: false,
+    status: 500,
+    text: async () => 'Internal Server Error',
+  });
 });
 
 test('iife-harness: id-range score-batch cloudflare body walks the batch-blocked branch', async () => {
-  const { ctx, window } = buildContext({
-    fetchResponse: null,
-    modeOverrides: {
-      PBINFO_GET_UNSOLVED_MODE: 'id-range',
-      PBINFO_GET_UNSOLVED_ID_START: 7,
-      PBINFO_GET_UNSOLVED_ID_END: 7,
-      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: true,
-      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH_SIZE: 200,
-      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
-      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
-      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
-    },
+  await runScoreBatchScenario({
+    ok: true,
+    status: 200,
+    text: async () => '<html><body><div class="cf-chl-opt">Attention Required</div></body></html>',
   });
-  let call = 0;
-  window.fetch = () => {
-    call += 1;
-    return Promise.resolve(
-      call === 1
-        ? {
-            ok: true,
-            status: 200,
-            text: async () =>
-              '<html><body><div class="cf-chl-opt">Attention Required</div></body></html>',
-          }
-        : { ok: false, status: 404, text: async () => '<body>Pagina nu exista.</body>' }
-    );
-  };
-  ctx.fetch = window.fetch;
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 10; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
 });
 
 test('iife-harness: list-mode "invalid request" body → dedicated Invalid request branch', async () => {
@@ -905,34 +886,7 @@ test('iife-harness: no-requestAnimationFrame path exercises scheduleChunk setTim
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
   const keys = buildStateKeys(listUrl);
-  const problems = [];
-  for (let i = 0; i < 200; i++) {
-    problems.push({
-      id: i + 1,
-      name: `p${i + 1}`,
-      link: `/probleme/${i + 1}/x`,
-      difficulty: 1,
-      status: 'tried',
-      userScore: 50,
-      maxScore: 100,
-    });
-  }
-  const snapshot = {
-    version: 2,
-    schemaVersion: 2,
-    storageLevel: 'full',
-    savedAt: Date.now(),
-    pageLink: listUrl,
-    scanMode: 'list',
-    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
-    scanStartPage: 1,
-    pageQueue: [],
-    deferred: [],
-    inFlightPages: [],
-    seenProblemIds: problems.map((p) => p.id),
-    problems,
-    stats: { solved: 0, tried: problems.length, unattempted: 0, total: problems.length, pages: 1 },
-  };
+  const snapshot = makeLargeListSnapshot(listUrl);
   const { ctx, window } = buildContext({
     fetchResponse: {
       ok: true,
