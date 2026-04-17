@@ -1811,6 +1811,44 @@ function dispatchControlEvent(btn, window) {
   }
 }
 
+// Dispatch an 'input' or 'change' event to every input in the document so the
+// filter-UI handlers (scoreMin/scoreMax/search/includeUnknown/status checkboxes)
+// run their change bodies. Linkedom EventTarget stores listeners keyed to the
+// vm context that registered them — dispatching from outside the context
+// doesn't invoke them. Running the dispatch snippet inside the vm context
+// (via vm.runInContext) makes the listeners fire as expected.
+function dispatchAllInputEvents(ctx) {
+  const snippet = `
+    (() => {
+      const inputs = Array.from(document.querySelectorAll('input'));
+      globalThis.__HARNESS_INPUTS_SEEN__ = inputs.length;
+      globalThis.__HARNESS_INPUTS_TYPES__ = inputs.map((i) => i.type);
+      for (const el of inputs) {
+        try {
+          if (el.type === 'checkbox') {
+            el.checked = !el.checked;
+            el.dispatchEvent(new window.Event('change', { bubbles: true }));
+          } else if (el.type === 'number') {
+            el.value = '25';
+            el.dispatchEvent(new window.Event('input', { bubbles: true }));
+            el.value = '';
+            el.dispatchEvent(new window.Event('input', { bubbles: true }));
+          } else if (el.type === 'search' || el.type === 'text') {
+            el.value = 'demo';
+            el.dispatchEvent(new window.Event('input', { bubbles: true }));
+          }
+        } catch (e) { /* best effort */ }
+      }
+      return inputs.length;
+    })();
+  `;
+  try {
+    return vm.runInContext(snippet, ctx); // NOSONAR: javascript:S1523 — executing a harness-controlled literal with no user input; only purpose is to fire events from inside the vm so listeners registered in-context are invoked.
+  } catch {
+    return 0;
+  }
+}
+
 test('iife-harness: exercising exported UI hooks (sortTable, stopScan, togglePause) after start', () => {
   const { ctx, window, document } = buildContext();
   loadLibraryInto(ctx);
@@ -1822,12 +1860,13 @@ test('iife-harness: exercising exported UI hooks (sortTable, stopScan, togglePau
   callHook(window, 'sortTable', 'id');
   callHook(window, 'stopScan');
   callHook(window, 'togglePause');
-  callHook(window, 'closeOverlay');
-  // Dispatch click / change events on every button and select that
-  // setupControls wired up. Each event triggers one of the export /
-  // snapshot / theme handlers, which exercises large spans of the IIFE.
+  // Dispatch input events FIRST (status checkboxes, score min/max, search box,
+  // include-unknown) so the overlay is still attached and the filter handlers
+  // can run. Clicking the "Închide overlay" button below removes appRoot.
+  dispatchAllInputEvents(ctx);
   const controls = Array.from(document.querySelectorAll('button, select'));
   for (const ctrl of controls) dispatchControlEvent(ctrl, window);
+  callHook(window, 'closeOverlay');
 });
 
 test('iife-harness: auto-run gate (NO_AUTORUN undefined) fires runPbinfoGetUnsolved on load', () => {
