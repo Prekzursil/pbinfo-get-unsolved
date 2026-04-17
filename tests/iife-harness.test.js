@@ -973,8 +973,6 @@ test('iife-harness: copy handlers with clipboard-api success hit the method=clip
 test('iife-harness: copy handlers with execCommand-success fallback hit the method branch', async () => {
   // Seed a 1-problem snapshot so the copy buttons have something to serialize.
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
-  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
-  const keys = buildStateKeys(listUrl);
   const snapshot = makeEmptySnapshot(listUrl, {
     savedAt: Date.now(),
     seenProblemIds: [7],
@@ -1003,17 +1001,7 @@ test('iife-harness: copy handlers with execCommand-success fallback hit the meth
       PBINFO_GET_UNSOLVED_DELAY_MS: 0,
     },
   });
-  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
-  window.confirm = () => true;
-  ctx.confirm = window.confirm;
-  // Route the first prompt (link) to listUrl so pageLink matches seeded keys.
-  let pcall = 0;
-  window.prompt = (_m, fallback) => {
-    pcall += 1;
-    if (pcall === 1) return listUrl;
-    return fallback ?? '';
-  };
-  ctx.prompt = window.prompt;
+  seedSnapshotRestore({ ctx, window, listUrl, snap: snapshot });
   // Stub document.execCommand('copy') to return true so the fallback path
   // in copyTextToClipboard resolves { method: 'execCommand' } and the
   // copy-link / copy-id / copy-markdown handlers log the "fallback legacy"
@@ -1306,18 +1294,9 @@ test('iife-harness: loadStateBtn snapshot: branch via override + in-vm pause+loa
       text: async () => '<body>Pagina nu exista.</body>',
     });
   ctx.fetch = window.fetch;
-  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
   window.localStorage.setItem(keys.index, JSON.stringify([indexItem]));
   window.localStorage.setItem(`${keys.itemPrefix}loadme`, JSON.stringify(snapshot));
-  window.confirm = () => true;
-  ctx.confirm = window.confirm;
-  let pcall = 0;
-  window.prompt = (_m, fallback) => {
-    pcall += 1;
-    if (pcall === 1) return listUrl;
-    return fallback ?? '';
-  };
-  ctx.prompt = window.prompt;
+  seedSnapshotRestore({ ctx, window, listUrl, snap: snapshot });
   await startAndDrain(ctx, window, 8);
   // Override select.value to the snapshot option so loadStateBtn takes the
   // `startsWith('snapshot:')` branch.
