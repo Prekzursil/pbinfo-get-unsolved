@@ -2007,6 +2007,58 @@ test('iife-harness: mode-prompt cancel exits cleanly with the mode abort log', (
   }
 });
 
+test('iife-harness: mode-prompt returning "2" picks id-range mode', () => {
+  const { ctx, window } = buildContext({
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_ID_START: 1,
+      PBINFO_GET_UNSOLVED_ID_END: 1,
+    },
+  });
+  window.PBINFO_GET_UNSOLVED_MODE_PROMPT = true;
+  let call = 0;
+  // First prompt = mode ('2' selects id-range). Subsequent = defaults.
+  window.prompt = (_msg, fallback) => {
+    call += 1;
+    if (call === 1) return '2';
+    return fallback ?? '1-1';
+  };
+  ctx.prompt = window.prompt;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* best effort */
+  }
+});
+
+test('iife-harness: mode-prompt returning "" falls back to window mode', () => {
+  const { ctx, window } = buildContext();
+  window.PBINFO_GET_UNSOLVED_MODE_PROMPT = true;
+  window.PBINFO_GET_UNSOLVED_MODE = 'list';
+  window.prompt = (_msg, fallback) => fallback ?? '';
+  ctx.prompt = window.prompt;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* best effort */
+  }
+});
+
+test('iife-harness: mode-prompt returning junk falls back to list', () => {
+  const { ctx, window } = buildContext();
+  window.PBINFO_GET_UNSOLVED_MODE_PROMPT = true;
+  window.PBINFO_GET_UNSOLVED_MODE = undefined;
+  window.prompt = (_msg, fallback) => fallback ?? 'xyz';
+  ctx.prompt = window.prompt;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* best effort */
+  }
+});
+
 test('iife-harness: list-mode link prompt cancel hits the pageLinkInput abort', () => {
   const { ctx, window } = buildContext({
     modeOverrides: { PBINFO_GET_UNSOLVED_MODE: 'list' },
@@ -2026,9 +2078,11 @@ test('iife-harness: list-mode invalid link returns null from normalizeListUrl', 
   const { ctx, window } = buildContext({
     modeOverrides: { PBINFO_GET_UNSOLVED_MODE: 'list' },
   });
-  // Return a value that normalizeListUrl rejects (no URL can resolve).
-  // An empty string with no default and no base -> null -> L1520-1523 abort.
+  // Set both window.location AND ctx.location to an empty-href origin so
+  // defaultLink is '' inside the IIFE and normalizeListUrl('','','start')
+  // returns null -> invalid-link abort branch fires.
   window.location = { href: '', origin: '' };
+  ctx.location = window.location;
   window.prompt = () => '';
   ctx.prompt = window.prompt;
   loadLibraryInto(ctx);

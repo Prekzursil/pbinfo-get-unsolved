@@ -45,6 +45,12 @@ test('safePbinfoFetchUrl: absolute URL with bad base still rejects wrong host', 
   );
 });
 
+test('safePbinfoFetchUrl: malformed URL that throws in parser returns null (catch branch)', () => {
+  // "http://[" is rejected by the WHATWG URL parser with an Invalid URL
+  // throw; exercises the try/catch branch.
+  assert.equal(safePbinfoFetchUrl('http://['), null);
+});
+
 test('safePbinfoFetchUrl: custom base still enforces host allow-list', () => {
   assert.equal(
     safePbinfoFetchUrl('/x', { base: 'https://evil.example.com/' }),
