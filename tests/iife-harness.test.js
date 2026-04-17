@@ -1080,6 +1080,48 @@ test('iife-harness: list scan with LIVE_RENDER=true + fully-decorated card exerc
   await startAndDrain(ctx, window, 8);
 });
 
+test('iife-harness: snapshot with deferred/pageQueue/nextSequentialPage exercises queue restore branches', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const snapshot = {
+    version: 2,
+    schemaVersion: 2,
+    storageLevel: 'full',
+    savedAt: Date.now(),
+    pageLink: listUrl,
+    scanMode: 'list',
+    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
+    scanStartPage: 1,
+    pageQueue: [3, 5, 7],
+    deferred: [
+      [4, 1],
+      [6, 2],
+    ],
+    inFlightPages: [2],
+    seenProblemIds: [1, 2, 3],
+    nextSequentialPage: 8,
+    problems: [],
+    stats: { solved: 0, tried: 3, unattempted: 0, total: 3, pages: 1 },
+  };
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  await startAndDrain(ctx, window, 8);
+});
+
 test('iife-harness: minimal-snapshot restore logs the compact-state notice', async () => {
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
