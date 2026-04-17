@@ -653,6 +653,62 @@ test('iife-harness: 200-problem restored snapshot triggers scheduleChunk + clear
   }
 });
 
+test('iife-harness: id-range 403 forbidden response walks the forbidden-skip branch', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: false,
+      status: 403,
+      text: async () => 'Forbidden',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'id-range',
+      PBINFO_GET_UNSOLVED_ID_START: 7,
+      PBINFO_GET_UNSOLVED_ID_END: 7,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: false,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+    },
+  });
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 8; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
+test('iife-harness: id-range 404 missing response walks the not-found-skip branch', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: false,
+      status: 404,
+      text: async () => '<html><body>Pagina nu exista</body></html>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'id-range',
+      PBINFO_GET_UNSOLVED_ID_START: 7,
+      PBINFO_GET_UNSOLVED_ID_END: 7,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: false,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+    },
+  });
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 8; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
 test('iife-harness: no-requestAnimationFrame path exercises scheduleChunk setTimeout fallback', async () => {
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
