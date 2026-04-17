@@ -1372,6 +1372,47 @@ test('iife-harness: overlay=true + closeOverlay exercise the overlay teardown br
   await drainMicrotasks(4);
 });
 
+test('iife-harness: 50-ID score-batch hits maybeLogIdRangeProgress log-every-50 branch', async () => {
+  // Score batch with 50 problems, all scor=50 -> processIdRangeFromScoreBatch
+  // runs 50 times, stats.pages hits 50, 50 % 50 === 0 -> L3450-3452 addLog.
+  const data = [];
+  for (let i = 1; i <= 50; i++) data.push({ id_problema: i, scor: '50' });
+  const batchPayload = JSON.stringify({ data });
+  let call = 0;
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'id-range',
+      PBINFO_GET_UNSOLVED_ID_START: 1,
+      PBINFO_GET_UNSOLVED_ID_END: 50,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: true,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH_SIZE: 50,
+      PBINFO_GET_UNSOLVED_ID_LOG_EVERY: 1, // Math.max(50, 1) = 50 -> fires at 50 pages
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+    },
+  });
+  window.fetch = () => {
+    call += 1;
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      text: async () => (call === 1 ? batchPayload : ''),
+    });
+  };
+  ctx.fetch = window.fetch;
+  await startAndDrain(ctx, window, 24);
+  try {
+    window.stopScan?.('harness');
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 6; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
 test('iife-harness: id-range score-batch with tried score (< 100) hits stats.tried++ branch', async () => {
   // scor=50 -> status='tried' in processIdRangeFromScoreBatch, exercising
   // the else stats.tried++ branch at L3632.
