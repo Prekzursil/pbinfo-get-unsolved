@@ -2197,6 +2197,80 @@ test('iife-harness: import JSON flow with a stubbed file triggers saveImportedSn
   await dispatchImport(window, document, JSON.stringify(importable));
 });
 
+test('iife-harness: restore minimal-only saved state hits kind=minimal note log', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  // Seed keys.minimal (not .full) so the IIFE resolves kind='minimal'.
+  // storageLevel 'minimal' hits the "compact / unele metadate pot lipsi" log.
+  const snap = makeEmptySnapshot(listUrl, {
+    storageLevel: 'minimal',
+    problems: [
+      { id: 3, name: 'mini', link: '/3', status: 'tried', userScore: 30, maxScore: 100 },
+    ],
+    stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
+  });
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.localStorage.setItem(keys.minimal, JSON.stringify(snap));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  let pcall = 0;
+  window.prompt = (_m, fallback) => {
+    pcall += 1;
+    if (pcall === 1) return listUrl;
+    return fallback ?? '';
+  };
+  ctx.prompt = window.prompt;
+  await startAndDrain(ctx, window, 8);
+});
+
+test('iife-harness: restore progress-level saved state hits kind=minimal+progress log', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  // storageLevel 'progress' with kind='minimal' triggers the "doar ca
+  // progres; lista completă nu este disponibilă" log (L3400-3403).
+  const snap = makeEmptySnapshot(listUrl, {
+    storageLevel: 'progress',
+    problems: [],
+    stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
+  });
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.localStorage.setItem(keys.minimal, JSON.stringify(snap));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  let pcall = 0;
+  window.prompt = (_m, fallback) => {
+    pcall += 1;
+    if (pcall === 1) return listUrl;
+    return fallback ?? '';
+  };
+  ctx.prompt = window.prompt;
+  await startAndDrain(ctx, window, 8);
+});
+
 test('iife-harness: import minimal-level snapshot hits the minimal fallback chain', async () => {
   const importable = makeEmptySnapshot(undefined, {
     storageLevel: 'minimal',
