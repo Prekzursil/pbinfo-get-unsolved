@@ -1104,27 +1104,33 @@ test('iife-harness: loadStateBtn snapshot: branch with missing item returns "ine
 });
 
 test('iife-harness: loadStateBtn with no saved state hits the no-snapshot log', async () => {
+  // Resolve fetch with a terminator body so scan finishes cleanly
+  // (finished=true, inFlight=0). Both guards in loadStateBtn pass. Clear
+  // localStorage just before the click so loadSavedStateForLink returns
+  // null -> L2465-2469 "Nu există stare salvată" log fires.
   const { ctx, window } = buildContext({
-    fetchResponse: null,
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
     modeOverrides: {
       PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
       PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
       PBINFO_GET_UNSOLVED_DELAY_MS: 0,
     },
   });
-  window.fetch = () => new Promise(() => {}); // never resolves, so scan stays running
-  ctx.fetch = window.fetch;
   window.confirm = () => true;
   ctx.confirm = window.confirm;
-  await startAndDrain(ctx, window, 4);
+  await startAndDrain(ctx, window, 8);
+  // Wipe any autosave written during scan completion.
+  window.localStorage.clear();
   vm.runInContext(
     `
     (() => {
-      const btns = Array.from(document.querySelectorAll('button'));
-      const pause = btns.find((b) => (b.textContent || '').trim() === 'Pauză');
-      if (pause) pause.dispatchEvent(new window.Event('click', { bubbles: true }));
-      const load = btns.find((b) => (b.textContent || '').trim() === 'Încarcă');
-      if (load) load.dispatchEvent(new window.Event('click', { bubbles: true }));
+      const btn = Array.from(document.querySelectorAll('button'))
+        .find((b) => (b.textContent || '').trim() === 'Încarcă');
+      if (btn) btn.dispatchEvent(new window.Event('click', { bubbles: true }));
     })();
   `,
     ctx
