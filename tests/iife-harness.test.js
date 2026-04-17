@@ -1025,15 +1025,7 @@ test('iife-harness: deleteSnapshotItem with throwing index write hits failure lo
   });
   win.localStorage.setItem(keys.index, JSON.stringify([indexItem]));
   win.localStorage.setItem(`${keys.itemPrefix}doomed`, JSON.stringify(snapshot));
-  win.confirm = () => true;
-  ctx.confirm = win.confirm;
-  let pcall = 0;
-  win.prompt = (_m, fallback) => {
-    pcall += 1;
-    if (pcall === 1) return listUrl;
-    return fallback ?? '';
-  };
-  ctx.prompt = win.prompt;
+  seedSnapshotRestore({ ctx, window: win, listUrl, snap: snapshot });
   await startAndDrain(ctx, win, 8);
   // After load, wrap setItem to fail for index writes. Then click Șterge
   // with the snapshot option selected -> deleteSnapshotItem's index write
