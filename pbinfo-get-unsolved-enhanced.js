@@ -769,6 +769,17 @@ function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
   return base + Math.floor((id - base) / size) * size;
 }
 
+function computeEta(done, total, elapsedMs) {
+  const d = Number.isFinite(done) ? Math.max(0, done) : 0;
+  const t = Number.isFinite(total) ? total : null;
+  const ms = Number.isFinite(elapsedMs) ? Math.max(0, elapsedMs) : 0;
+  if (t == null || t <= 0 || d === 0 || ms === 0) return null;
+  const rate = d / ms;
+  if (rate <= 0) return null;
+  const remaining = Math.max(0, t - d);
+  return Math.round(remaining / rate);
+}
+
 function computeScanSummary(visible, allProblems, { scanMode = 'list', pages = 0 } = {}) {
   const visibleList = Array.isArray(visible) ? visible : [];
   const all = Array.isArray(allProblems) ? allProblems : [];
@@ -1105,6 +1116,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       copyTextViaExecCommand,
       computeRenderShape,
       computeScanSummary,
+      computeEta,
     };
   }
 } else {
