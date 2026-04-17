@@ -629,30 +629,23 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
     const options = Array.from(sel.querySelectorAll('option'));
     const snapshotOption = options.find((o) => (o.value || '').startsWith('snapshot:'));
     if (snapshotOption) {
-      for (const o of options) {
-        try {
-          o.removeAttribute('selected');
-        } catch {
-          /* best effort */
-        }
-      }
+      // linkedom defines `value` as a configurable getter on the
+      // HTMLSelectElement prototype. Override at the prototype level so
+      // the IIFE's `stateSelect.value` read returns the seeded snapshot id.
+      // Remember the original descriptor so the caller can restore it.
       try {
-        snapshotOption.setAttribute('selected', 'selected');
-        sel.removeChild(snapshotOption);
-        sel.insertBefore(snapshotOption, sel.firstChild);
-      } catch {
-        /* best effort */
-      }
-      try {
-        Object.defineProperty(sel, 'value', {
+        const proto = Object.getPrototypeOf(sel);
+        const originalDesc = Object.getOwnPropertyDescriptor(proto, 'value');
+        Object.defineProperty(proto, 'value', {
           configurable: true,
           get() {
             return snapshotOption.value;
           },
-          set() {
-            /* ignore */
-          },
         });
+        // Expose restore fn on sel for the test to call after it's done.
+        sel.__restoreProto = () => {
+          if (originalDesc) Object.defineProperty(proto, 'value', originalDesc);
+        };
       } catch {
         /* best effort */
       }
@@ -686,6 +679,14 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
     /* ignore */
   }
   await drainMicrotasks(4);
+  // Restore the select.value prototype descriptor so later tests see the
+  // default getter again.
+  for (const sel of Array.from(document.querySelectorAll('select'))) {
+    if (typeof sel.__restoreProto === 'function') {
+      sel.__restoreProto();
+      break;
+    }
+  }
 });
 
 test('iife-harness: overlay=true + closeOverlay exercise the overlay teardown branch', async () => {
