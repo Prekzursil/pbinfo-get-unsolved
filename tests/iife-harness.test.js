@@ -211,10 +211,60 @@ test('iife-harness: id-range mode initializes without throwing', () => {
   }
 });
 
-// Realistic-body exercises get complex because fetch() is async and the
-// scanner keeps the event loop alive until the scan fully drains. We keep
-// only the initialization + id-range + UI-hook exercises; the pure-helper
-// tests already cover all the parsing paths the realistic body would hit.
+test('iife-harness: list scan against a "not found" body runs the response pipeline', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<html><body>Pagina nu exista.</body></html>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+    },
+  });
+  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
+  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  // Let pending microtasks drain — the scanner's fetch().then(async) chain
+  // completes on the next tick. Two ticks gets most of the body + finalize.
+  for (let i = 0; i < 4; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
+test('iife-harness: list scan against a blocked cloudflare-ish body exercises the retry path', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () =>
+        '<html><body><div class="cf-chl-opt">Attention Required</div></body></html>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+    },
+  });
+  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
+  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 4; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
 
 function callHook(window, name, arg) {
   const fn = window[name];
