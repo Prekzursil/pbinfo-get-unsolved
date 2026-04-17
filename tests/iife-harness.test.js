@@ -408,6 +408,34 @@ test('iife-harness: list scan against a "not found" body runs the response pipel
   }
 });
 
+test('iife-harness: debug mode with DEBUG_HTML logs the card outerHTML', async () => {
+  const body = `<!doctype html><html><body>
+    <div class="row">
+      <div class="card mb-3">
+        <code>#43</code>
+        <a href="/probleme/43/test"><h5>Unattempted</h5></a>
+        <span class="badge" title="Punctaj maxim">100p</span>
+      </div>
+    </div>
+    <p>Pagina nu exista.</p>
+  </body></html>`;
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_DEBUG: true,
+      PBINFO_GET_UNSOLVED_DEBUG_HTML: true,
+    },
+  });
+  installSequencedFetch(window, ctx, [
+    { ok: true, status: 200, text: async () => body },
+    { ok: true, status: 200, text: async () => '<body>Pagina nu exista.</body>' },
+  ]);
+  await startAndDrain(ctx, window, 8);
+});
+
 test('iife-harness: list debug scan with unattempted card hits debugDumpCard with candidates', async () => {
   // Max-points-only tooltip: produces a candidates array with a single
   // max-hint entry, but the scoreInfo resolves to userScore=null so the
