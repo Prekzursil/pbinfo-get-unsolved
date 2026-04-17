@@ -769,6 +769,26 @@ function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
   return base + Math.floor((id - base) / size) * size;
 }
 
+function shouldEmitDebugDump(id, { enabled = false, dumped = 0, limit = 1, ids = null } = {}) {
+  if (!enabled) return false;
+  if (dumped >= limit) return false;
+  if (ids && typeof ids.has === 'function' && !ids.has(id)) return false;
+  return true;
+}
+
+function describeClipboardError(err, { navigator: nav = null, isSecureContext = false } = {}) {
+  if (err?.isSecureContext === false) {
+    return 'Context nesecurizat: Clipboard API modern cere HTTPS.';
+  }
+  if (err?.clipboardApiError?.name === 'NotAllowedError') {
+    return 'Permisiune clipboard respinsă. Fă click în pagină și încearcă din nou.';
+  }
+  if (nav?.clipboard?.writeText && isSecureContext) {
+    return 'Browserul a blocat accesul la clipboard. Încearcă din nou după interacțiune.';
+  }
+  return 'Clipboard indisponibil; folosește exportul și copiere manuală.';
+}
+
 function numberToDifficulty(n) {
   if (n === 0) return 'ușoară';
   if (n === 1) return 'medie';
@@ -966,6 +986,8 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       difficultyColor,
       statusLabel,
       statusColor,
+      shouldEmitDebugDump,
+      describeClipboardError,
     };
   }
 } else {
@@ -1532,10 +1554,12 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
     }
 
     function shouldDebugDump(id) {
-      if (!debugEnabled) return false;
-      if (debugDumped >= debugDumpLimit) return false;
-      if (debugIds && !debugIds.has(id)) return false;
-      return true;
+      return shouldEmitDebugDump(id, {
+        enabled: debugEnabled,
+        dumped: debugDumped,
+        limit: debugDumpLimit,
+        ids: debugIds,
+      });
     }
 
     function debugDumpCard(card, meta) {
@@ -1613,17 +1637,11 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       throw error;
     }
 
-    function describeClipboardError(err) {
-      if (err?.isSecureContext === false) {
-        return 'Context nesecurizat: Clipboard API modern cere HTTPS.';
-      }
-      if (err?.clipboardApiError?.name === 'NotAllowedError') {
-        return 'Permisiune clipboard respinsă. Fă click în pagină și încearcă din nou.';
-      }
-      if (navigator?.clipboard?.writeText && window.isSecureContext) {
-        return 'Browserul a blocat accesul la clipboard. Încearcă din nou după interacțiune.';
-      }
-      return 'Clipboard indisponibil; folosește exportul și copiere manuală.';
+    function describeClipboardErrorLocal(err) {
+      return describeClipboardError(err, {
+        navigator: typeof navigator === 'undefined' ? null : navigator,
+        isSecureContext: typeof window !== 'undefined' && Boolean(window.isSecureContext),
+      });
     }
 
     const allProblems = [];
@@ -2043,7 +2061,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           }
         } catch (err) {
           addLog(
-            `<span style="color:#b30000;">Nu am putut copia link-urile în clipboard. ${describeClipboardError(err)}</span>`
+            `<span style="color:#b30000;">Nu am putut copia link-urile în clipboard. ${describeClipboardErrorLocal(err)}</span>`
           );
           console.error(err);
         }
@@ -2068,7 +2086,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           }
         } catch (err) {
           addLog(
-            `<span style="color:#b30000;">Nu am putut copia ID-urile în clipboard. ${describeClipboardError(err)}</span>`
+            `<span style="color:#b30000;">Nu am putut copia ID-urile în clipboard. ${describeClipboardErrorLocal(err)}</span>`
           );
           console.error(err);
         }
@@ -2095,7 +2113,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           }
         } catch (err) {
           addLog(
-            `<span style="color:#b30000;">Nu am putut copia Markdown în clipboard. ${describeClipboardError(err)}</span>`
+            `<span style="color:#b30000;">Nu am putut copia Markdown în clipboard. ${describeClipboardErrorLocal(err)}</span>`
           );
           console.error(err);
         }
