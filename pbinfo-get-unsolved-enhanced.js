@@ -769,6 +769,18 @@ function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
   return base + Math.floor((id - base) / size) * size;
 }
 
+function redactScoreCandidates(candidates) {
+  const list = Array.isArray(candidates) ? candidates : [];
+  return list.map((c) => ({
+    tooltip: sanitizeForDebugLog(c?.tooltip, 80),
+    text: sanitizeForDebugLog(c?.text, 80),
+    value: Number.isFinite(c?.value) ? c.value : null,
+    max: Number.isFinite(c?.max) ? c.max : null,
+    hasRatio: Boolean(c?.hasRatio),
+    isLink: Boolean(c?.isLink),
+  }));
+}
+
 function formatFetchRetryLog(unitLabel, delayLabel, isTimeout) {
   if (isTimeout) return `Timeout la ${unitLabel}. Reîncerc în ${delayLabel}...`;
   return `Eroare de rețea la ${unitLabel}. Reîncerc în ${delayLabel}...`;
@@ -1238,6 +1250,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       formatVirtualizationBanner,
       formatIdRangeProgressLog,
       formatFetchRetryLog,
+      redactScoreCandidates,
     };
   }
 } else {
@@ -4023,14 +4036,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
                 // the raw response is "user-controlled" from its POV.
                 const redactedName = sanitizeForDebugLog(meta.name, 120);
                 const redactedLink = sanitizeForDebugLog(link, 200);
-                const redactedCandidates = scoreInfo.candidates.map((c) => ({
-                  tooltip: sanitizeForDebugLog(c.tooltip, 80),
-                  text: sanitizeForDebugLog(c.text, 80),
-                  value: Number.isFinite(c.value) ? c.value : null,
-                  max: Number.isFinite(c.max) ? c.max : null,
-                  hasRatio: Boolean(c.hasRatio),
-                  isLink: Boolean(c.isLink),
-                }));
+                const redactedCandidates = redactScoreCandidates(scoreInfo.candidates);
                 console.log('pbinfo-get-unsolved debug problem page:', {
                   id: Number.isFinite(pageIndex) ? Math.trunc(pageIndex) : null,
                   name: redactedName,
