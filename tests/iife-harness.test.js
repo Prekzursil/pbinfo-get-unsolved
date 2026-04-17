@@ -1113,6 +1113,34 @@ test('iife-harness: id-range with debug enabled exercises the problem-page debug
   await startAndDrain(ctx, window, 8);
 });
 
+test('iife-harness: id-range 403 with batch-populated score hits the knownIdRangeScore push branch', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'id-range',
+      PBINFO_GET_UNSOLVED_ID_START: 7,
+      PBINFO_GET_UNSOLVED_ID_END: 7,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: true,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH_SIZE: 200,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+    },
+  });
+  // First call: batch returns scor=42 (not a solve, so scanner proceeds to
+  // detail fetch). Second call: detail returns 403 — scanner pushes entry
+  // into allProblems via the knownIdRangeScore branch.
+  installSequencedFetch(window, ctx, [
+    {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ data: [{ id_problema: 7, scor: '42' }] }),
+    },
+    { ok: false, status: 403, text: async () => 'Forbidden' },
+  ]);
+  await startAndDrain(ctx, window, 12);
+});
+
 test('iife-harness: id-range 403 forbidden response walks the forbidden-skip branch', async () => {
   const { ctx, window } = buildContext({
     fetchResponse: {
