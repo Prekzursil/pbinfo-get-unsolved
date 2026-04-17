@@ -769,6 +769,18 @@ function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
   return base + Math.floor((id - base) / size) * size;
 }
 
+function effectiveDelayMs({ enabled, baseDelayMs, adaptiveDelayMs } = {}) {
+  const base = Number.isFinite(baseDelayMs) ? baseDelayMs : 0;
+  const adaptive = Number.isFinite(adaptiveDelayMs) ? adaptiveDelayMs : 0;
+  return enabled ? Math.max(base, adaptive) : base;
+}
+
+function effectiveConcurrency({ enabled, baseConcurrency, adaptiveConcurrency } = {}) {
+  const base = Number.isFinite(baseConcurrency) ? Math.max(1, baseConcurrency) : 1;
+  const adaptive = Number.isFinite(adaptiveConcurrency) ? adaptiveConcurrency : base;
+  return enabled ? Math.max(1, Math.min(base, adaptive)) : base;
+}
+
 function parseHtmlDocument(responseText, { ParserClass } = {}) {
   let ctor = ParserClass;
   if (!ctor && globalThis.DOMParser !== undefined) ctor = globalThis.DOMParser;
@@ -998,6 +1010,8 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       shouldEmitDebugDump,
       describeClipboardError,
       parseHtmlDocument,
+      effectiveDelayMs,
+      effectiveConcurrency,
     };
   }
 } else {
@@ -1162,15 +1176,19 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
     };
 
     function getEffectiveDelayMs() {
-      return adaptiveThrottleState.enabled
-        ? Math.max(config.delayMs, adaptiveThrottleState.delayMs)
-        : config.delayMs;
+      return effectiveDelayMs({
+        enabled: adaptiveThrottleState.enabled,
+        baseDelayMs: config.delayMs,
+        adaptiveDelayMs: adaptiveThrottleState.delayMs,
+      });
     }
 
     function getEffectiveConcurrency() {
-      return adaptiveThrottleState.enabled
-        ? Math.max(1, Math.min(config.concurrency, adaptiveThrottleState.concurrency))
-        : config.concurrency;
+      return effectiveConcurrency({
+        enabled: adaptiveThrottleState.enabled,
+        baseConcurrency: config.concurrency,
+        adaptiveConcurrency: adaptiveThrottleState.concurrency,
+      });
     }
 
     function computeBackoffDelay(attempt) {
