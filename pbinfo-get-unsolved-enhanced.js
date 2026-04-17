@@ -1583,11 +1583,9 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
     if (candidate && candidate.pageLink === pageLink) {
       const savedAt = formatDateTime(candidate.savedAt);
       const pages = Number.isFinite(candidate.stats?.pages) ? candidate.stats.pages : null;
-      const problems = Number.isFinite(candidate.stats?.total)
-        ? candidate.stats.total
-        : Array.isArray(candidate.problems)
-          ? candidate.problems.length
-          : null;
+      // migrateStateSnapshotToV2 guarantees stats.total is a finite number, so
+      // the previous "fall back to candidate.problems.length" branch is dead.
+      const problems = Number.isFinite(candidate.stats?.total) ? candidate.stats.total : null;
       const kind = savedFull ? 'full' : 'minimal';
       const note = kind === 'minimal' ? ' (doar progres, fără lista completă)' : '';
       const unitLabel = scanMode === 'id-range' ? 'ID-uri scanate' : 'Pagini scanate';
