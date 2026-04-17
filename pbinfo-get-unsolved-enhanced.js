@@ -769,6 +769,15 @@ function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
   return base + Math.floor((id - base) / size) * size;
 }
 
+function formatIdRangeProgressLog(problemId, stats = {}) {
+  const pages = Number.isFinite(stats.pages) ? stats.pages : 0;
+  const total = Number.isFinite(stats.total) ? stats.total : 0;
+  const missing = Number.isFinite(stats.missing) ? stats.missing : 0;
+  const forbidden = Number.isFinite(stats.forbidden) ? stats.forbidden : 0;
+  const forbiddenSuffix = forbidden > 0 ? ` · 403 ${forbidden}` : '';
+  return `ID ${problemId}: progres (${pages} scanate) · găsite ${total} · 404 ${missing}${forbiddenSuffix}.`;
+}
+
 function formatVirtualizationBanner(shownCount, totalCount) {
   return `Virtualizare activă: afișez primele ${shownCount} din ${totalCount} rânduri. Filtrează/caută pentru restul.`;
 }
@@ -1181,6 +1190,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       computeEta,
       formatProgressText,
       formatVirtualizationBanner,
+      formatIdRangeProgressLog,
     };
   }
 } else {
@@ -3537,10 +3547,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       }
 
       if (stats.pages > 0 && stats.pages % idRangeLogEvery === 0) {
-        const forbiddenSuffix = stats.forbidden > 0 ? ` · 403 ${stats.forbidden}` : '';
-        addLog(
-          `ID ${problemId}: progres (${stats.pages} scanate) · găsite ${stats.total} · 404 ${stats.missing}${forbiddenSuffix}.`
-        );
+        addLog(formatIdRangeProgressLog(problemId, stats));
       }
 
       maybeAutoSave('id');
@@ -3803,10 +3810,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
               return;
             }
             if (stats.pages > 0 && stats.pages % idRangeLogEvery === 0) {
-              const forbiddenSuffix = stats.forbidden > 0 ? ` · 403 ${stats.forbidden}` : '';
-              addLog(
-                `ID ${pageIndex}: progres (${stats.pages} scanate) · găsite ${stats.total} · 404 ${stats.missing}${forbiddenSuffix}.`
-              );
+              addLog(formatIdRangeProgressLog(pageIndex, stats));
             }
             finalize();
             schedule(kick);
@@ -4000,10 +4004,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
             }
 
             if (stats.pages > 0 && stats.pages % idRangeLogEvery === 0) {
-              const forbiddenSuffix = stats.forbidden > 0 ? ` · 403 ${stats.forbidden}` : '';
-              addLog(
-                `ID ${pageIndex}: progres (${stats.pages} scanate) · găsite ${stats.total} · 404 ${stats.missing}${forbiddenSuffix}.`
-              );
+              addLog(formatIdRangeProgressLog(pageIndex, stats));
             }
 
             maybeAutoSave('id');
