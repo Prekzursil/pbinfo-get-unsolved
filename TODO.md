@@ -9,14 +9,17 @@ post-v3.0.0.
 ## High priority
 
 - [ ] Drive branch + line coverage on `pbinfo-get-unsolved-enhanced.js`
-      from the current 99.17 / 89.40 pair to a full 100/100 without
-      exclusions. Remaining uncovered lines are concentrated in: (i)
-      defensive storage-failure branches (`saveScanState`, `deleteSnapshotItem`);
-      (ii) `restoreFromSavedState` active-request abort loop that only fires
-      when `activeRequests.size > 0 && inFlight === 0` (not normally
-      reachable); (iii) `DEBUG_IDS` .map/.filter chain (adding a test
-      regresses unrelated coverage by ~1%); (iv) list-mode past-end
-      (`startOffset >= totalProblems`) which also regresses when added.
+      from the current 99.42 / 89.92 pair to a full 100/100 without
+      exclusions. Remaining uncovered lines are concentrated in:
+      (i) defensive storage-failure branches (`saveScanState`,
+      `deleteSnapshotItem`) – need surgical localStorage mutation tests;
+      (ii) `DEBUG_IDS` .map/.filter chain – adding a test regresses unrelated
+      coverage by ~1% (suspected linkedom shared-prototype state leak);
+      (iii) list-mode past-end (`startOffset >= totalProblems`) – the test
+      scaffold exists at end-of-file but the IIFE processes empty
+      responses as retry-worthy before the past-end check fires;
+      (iv) fetchPage deferPage-when-paused / inFlight>=concurrency branches
+      – hard to orchestrate timing without a racy fetch.
 - [ ] Verify each Quality Zero gate (Codacy, SonarCloud, QLTY, Semgrep,
       DeepSource, CodeQL, Codecov) reports 0 issues on the v3 PR, not just a
       green check rollup. Current status (PR #13): - PASS: test, CodeQL, DeepScan, DeepSource Visible Zero, Semgrep
