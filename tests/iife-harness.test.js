@@ -653,6 +653,31 @@ test('iife-harness: 200-problem restored snapshot triggers scheduleChunk + clear
   }
 });
 
+test('iife-harness: mode-prompt returning null aborts the start', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE_PROMPT: true,
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+    },
+  });
+  window.prompt = () => null;
+  ctx.prompt = window.prompt;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 4; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
 test('iife-harness: id-range with debug enabled exercises the problem-page debug dump', async () => {
   const problemPage = `<!doctype html><html><body>
     <h1>#7 Demo</h1>
