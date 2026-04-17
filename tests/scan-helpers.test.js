@@ -54,6 +54,20 @@ test('idRangeBatchStartForId: rejects bad ids and sizes', () => {
   assert.equal(idRangeBatchStartForId(100, { batchSize: 0 }), null);
 });
 
+test('idRangeBatchStartForId: non-finite startId / batchSize fall back to defaults', () => {
+  // startId non-finite -> defaults to 1.
+  assert.equal(idRangeBatchStartForId(200, { startId: Number.NaN, batchSize: 200 }), 1);
+  // batchSize non-finite -> defaults to 200.
+  assert.equal(idRangeBatchStartForId(200, { startId: 1, batchSize: Number.NaN }), 1);
+});
+
+test('parseIdRangeScoreValue: non-string inputs coerce to "-" blank result', () => {
+  assert.deepEqual(parseIdRangeScoreValue(null), { value: null, raw: '-' });
+  assert.deepEqual(parseIdRangeScoreValue(undefined), { value: null, raw: '-' });
+  assert.deepEqual(parseIdRangeScoreValue(42), { value: null, raw: '-' });
+  assert.deepEqual(parseIdRangeScoreValue({}), { value: null, raw: '-' });
+});
+
 test('serializeFilterState: Set of statuses becomes array; extras clamped', () => {
   const s = serializeFilterState({
     statuses: new Set(['tried', 'unattempted']),

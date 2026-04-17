@@ -99,3 +99,17 @@ test('formatProgressText: id-range without endId keeps raw done count', () => {
   assert.ok(out.includes('ID-uri 7'));
   assert.ok(!out.includes('/'));
 });
+
+test('formatProgressText: list mode with totalProblems but no pageSize hits else-if branch', () => {
+  // scanProblemsTotal is null when pageSize is NaN, but totalProblems is finite
+  // -> else-if branch prints "totalCount/totalProblems" (L909-910).
+  const out = formatProgressText({
+    scanMode: 'list',
+    stats: { pages: 1, total: 7 },
+    totalProblems: 50,
+    pageSize: Number.NaN,
+    scanStart: 1,
+    elapsedMs: 1000,
+  });
+  assert.ok(out.includes('probleme 7/50'));
+});
