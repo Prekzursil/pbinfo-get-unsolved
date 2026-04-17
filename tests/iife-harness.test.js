@@ -1424,6 +1424,61 @@ test('iife-harness: virtualize rows + 200-problem snapshot displays the virtuali
   await drainMicrotasks(6);
 });
 
+test('iife-harness: legacy v1 snapshot index merges with v2 via loadSnapshotIndexForLink', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keysV2 = buildStateKeys(listUrl, { version: 2 });
+  const keysV1 = buildStateKeys(listUrl, { version: 1 });
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  // Seed a legacy-v1 index item so loadSnapshotIndexForLink reads
+  // legacyStateKeys.index (L3020-3022) and merges it with current.
+  const now = Date.now();
+  window.localStorage.setItem(
+    keysV1.index,
+    JSON.stringify([
+      {
+        id: 'legacy-1',
+        savedAt: now - 2000,
+        storageLevel: 'full',
+        label: 'legacy',
+      },
+    ])
+  );
+  // Also seed a current-v2 index so the Map.has check fires for duplicates.
+  window.localStorage.setItem(
+    keysV2.index,
+    JSON.stringify([
+      {
+        id: 'v2-1',
+        savedAt: now - 1000,
+        storageLevel: 'full',
+        label: 'current',
+      },
+    ])
+  );
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  let pcall = 0;
+  window.prompt = (_m, fallback) => {
+    pcall += 1;
+    if (pcall === 1) return listUrl;
+    return fallback ?? '';
+  };
+  ctx.prompt = window.prompt;
+  await startAndDrain(ctx, window, 8);
+});
+
 test('iife-harness: restore from snapshot with only config.startPage hits the else-if fallback', async () => {
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
