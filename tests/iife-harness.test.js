@@ -251,7 +251,8 @@ test('iife-harness: list scan with debug enabled exercises debugDumpCard on pars
   const body = `<!doctype html><html><body>
     <div class="row">
       <div class="card mb-3">
-        <!-- no code element — forces parse-fail path -->
+        <!-- code present but non-numeric so idMatch fails and debugDumpCard runs -->
+        <code>abc</code>
         <a href="/probleme/x/oops" class="text-dark">
           <h5 class="card-title">Unparseable</h5>
         </a>
