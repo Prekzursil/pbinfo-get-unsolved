@@ -845,8 +845,8 @@ test('iife-harness: virtualize rows + 200-problem snapshot displays the virtuali
       PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
       PBINFO_GET_UNSOLVED_DELAY_MS: 0,
       PBINFO_GET_UNSOLVED_VIRTUALIZE_ROWS: true,
-      PBINFO_GET_UNSOLVED_VIRTUAL_ROWS_LIMIT: 50,
-      PBINFO_GET_UNSOLVED_RENDER_CHUNK_SIZE: 25,
+      PBINFO_GET_UNSOLVED_VIRTUAL_ROWS_LIMIT: 150,
+      PBINFO_GET_UNSOLVED_RENDER_CHUNK_SIZE: 200,
     },
   });
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));

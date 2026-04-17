@@ -769,6 +769,10 @@ function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
   return base + Math.floor((id - base) / size) * size;
 }
 
+function formatVirtualizationBanner(shownCount, totalCount) {
+  return `Virtualizare activă: afișez primele ${shownCount} din ${totalCount} rânduri. Filtrează/caută pentru restul.`;
+}
+
 function formatProgressText({
   scanMode = 'list',
   stats = {},
@@ -1176,6 +1180,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       computeScanSummary,
       computeEta,
       formatProgressText,
+      formatVirtualizationBanner,
     };
   }
 } else {
@@ -2756,7 +2761,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           const td = document.createElement('td');
           td.colSpan = headerDefs.length;
           td.className = 'muted';
-          td.textContent = `Virtualizare activă: afișez primele ${list.length} din ${listAll.length} rânduri. Filtrează/caută pentru restul.`;
+          td.textContent = formatVirtualizationBanner(list.length, listAll.length);
           row.appendChild(td);
           tbody.appendChild(row);
         }
