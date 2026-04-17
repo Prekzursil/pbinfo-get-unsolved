@@ -3446,6 +3446,12 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       else fn();
     }
 
+    function maybeLogIdRangeProgress(idForLog) {
+      if (stats.pages > 0 && stats.pages % idRangeLogEvery === 0) {
+        addLog(formatIdRangeProgressLog(idForLog, stats));
+      }
+    }
+
     const parseHtmlDocumentLocal = (responseText) => parseHtmlDocument(responseText);
 
     const getRetryDelayLabel = formatRetryDelayLabel;
@@ -3640,9 +3646,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
         stats.total++;
       }
 
-      if (stats.pages > 0 && stats.pages % idRangeLogEvery === 0) {
-        addLog(formatIdRangeProgressLog(problemId, stats));
-      }
+      maybeLogIdRangeProgress(problemId);
 
       maybeAutoSave('id');
       updateProgress(inFlight);
@@ -3887,9 +3891,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
               });
               return;
             }
-            if (stats.pages > 0 && stats.pages % idRangeLogEvery === 0) {
-              addLog(formatIdRangeProgressLog(pageIndex, stats));
-            }
+            maybeLogIdRangeProgress(pageIndex);
             finalize();
             schedule(kick);
             return;
@@ -4074,9 +4076,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
               }
             }
 
-            if (stats.pages > 0 && stats.pages % idRangeLogEvery === 0) {
-              addLog(formatIdRangeProgressLog(pageIndex, stats));
-            }
+            maybeLogIdRangeProgress(pageIndex);
 
             maybeAutoSave('id');
             maybeLiveRender();
