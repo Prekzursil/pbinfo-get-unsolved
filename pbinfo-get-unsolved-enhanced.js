@@ -769,6 +769,24 @@ function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
   return base + Math.floor((id - base) / size) * size;
 }
 
+function computeScanSummary(visible, allProblems, { scanMode = 'list', pages = 0 } = {}) {
+  const visibleList = Array.isArray(visible) ? visible : [];
+  const all = Array.isArray(allProblems) ? allProblems : [];
+  const shown = visibleList.length;
+  const total = all.length;
+  const unsolved = all.filter((p) => p?.status !== 'solved').length;
+  const unitLabel = scanMode === 'id-range' ? 'ID-uri' : 'pagini';
+  const pagesNum = Number.isFinite(pages) ? pages : 0;
+  return {
+    shown,
+    total,
+    unsolved,
+    unitLabel,
+    pages: pagesNum,
+    summaryText: ` scanate=${total} · nerezolvate=${unsolved} · afișate=${shown} · ${unitLabel}=${pagesNum}`,
+  };
+}
+
 function computeRenderShape(
   listAll,
   { tableRenderChunkSize = 150, virtualizeRows = false, virtualRowsLimit = null } = {}
@@ -1086,6 +1104,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       copyTextViaClipboardApi,
       copyTextViaExecCommand,
       computeRenderShape,
+      computeScanSummary,
     };
   }
 } else {
@@ -1776,18 +1795,15 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
     }
 
     function updateSummary(visible) {
-      const shown = visible.length;
-      const total = allProblems.length;
-      const unsolved = allProblems.filter((p) => p.status !== 'solved').length;
+      const { summaryText } = computeScanSummary(visible, allProblems, {
+        scanMode,
+        pages: stats.pages,
+      });
       summaryDiv.replaceChildren();
       const b = document.createElement('b');
       b.textContent = 'Statistici:';
       summaryDiv.appendChild(b);
-      summaryDiv.appendChild(
-        document.createTextNode(
-          ` scanate=${total} · nerezolvate=${unsolved} · afișate=${shown} · ${scanMode === 'id-range' ? 'ID-uri' : 'pagini'}=${stats.pages}`
-        )
-      );
+      summaryDiv.appendChild(document.createTextNode(summaryText));
     }
 
     function updateList(visible) {
