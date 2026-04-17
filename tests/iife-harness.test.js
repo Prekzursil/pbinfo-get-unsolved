@@ -288,6 +288,99 @@ test('iife-harness: list scan parses a real pbinfo card and drains without hangi
   }
 });
 
+test('iife-harness: id-range scan against a /probleme/N problem page drains', async () => {
+  const problemPage = `<!doctype html><html><body>
+    <h1>#7 Demo problem</h1>
+    <table>
+      <tr>
+        <td><a href="/user/x"><img src="/p.png">Poster</a></td>
+        <td>src</td>
+        <td>author</td>
+        <td>Mediu</td>
+        <td id="scor_utilizator_problema"><span class="badge">42</span></td>
+      </tr>
+    </table>
+  </body></html>`;
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => problemPage,
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'id-range',
+      PBINFO_GET_UNSOLVED_ID_START: 7,
+      PBINFO_GET_UNSOLVED_ID_END: 7,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: false,
+    },
+  });
+  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
+  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 8; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
+test('iife-harness: pre-seeded snapshot in localStorage triggers restoreFromSavedState', async () => {
+  // Pre-populate a v2 snapshot for the default list URL. When the scanner
+  // starts it will see the stored state and offer to restore, which we
+  // auto-accept via confirm() returning true.
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys, fnv1a32 } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  void fnv1a32;
+  const snapshot = {
+    version: 2,
+    schemaVersion: 2,
+    storageLevel: 'full',
+    savedAt: Date.now(),
+    pageLink: listUrl,
+    scanMode: 'list',
+    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
+    scanStartPage: 1,
+    pageQueue: [],
+    deferred: [],
+    inFlightPages: [],
+    seenProblemIds: [],
+    problems: [],
+    stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
+  };
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  // Seed the snapshot under the "full" key and accept the restore prompt.
+  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
+  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 8; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
 test('iife-harness: list scan against a blocked cloudflare-ish body exercises the retry path', async () => {
   const { ctx, window } = buildContext({
     fetchResponse: {
