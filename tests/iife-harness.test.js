@@ -67,6 +67,25 @@ async function dispatchImport(window, document, fileBody, fileName = 'snapshot.j
   await drainMicrotasks(6);
 }
 
+async function dispatchImportFailing(window, document, errorMessage = 'boom') {
+  const inputs = Array.from(document.querySelectorAll('input[type="file"]'));
+  for (const input of inputs) {
+    const stubFile = {
+      name: 'bad.json',
+      text: async () => {
+        throw new Error(errorMessage);
+      },
+    };
+    Object.defineProperty(input, 'files', { value: [stubFile], configurable: true });
+    try {
+      input.dispatchEvent(new window.Event('change', { bubbles: true }));
+    } catch {
+      /* best effort */
+    }
+  }
+  await drainMicrotasks(6);
+}
+
 function clickAllButtons(window, document) {
   const buttons = Array.from(document.querySelectorAll('button'));
   for (const btn of buttons) {
@@ -2044,6 +2063,23 @@ test('iife-harness: import invalid JSON → early return with invalid-file log',
   });
   await startAndDrain(ctx, window, 4);
   await dispatchImport(window, document, '{ not valid JSON', 'bad.json');
+});
+
+test('iife-harness: import with file.text() throwing hits the catch branch', async () => {
+  const { ctx, window, document } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  await startAndDrain(ctx, window, 4);
+  await dispatchImportFailing(window, document);
 });
 
 test('iife-harness: import with pageLink mismatch + confirm rejects → early return', async () => {
