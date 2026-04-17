@@ -2903,11 +2903,30 @@ test('iife-harness: exercising exported UI hooks (sortTable, stopScan, togglePau
   // include-unknown) so the overlay is still attached and the filter handlers
   // can run. Clicking the "Închide overlay" button below removes appRoot.
   dispatchAllInputEvents(ctx);
+  // Dispatch SELECT change events INSIDE the vm first so theme + session
+  // select change handlers registered during setupControls actually fire.
+  // (Listeners attached inside the vm context don't always fire when
+  // dispatchEvent runs from the outer scope.)
+  vm.runInContext(
+    `
+    (() => {
+      const selects = Array.from(document.querySelectorAll('select'));
+      for (const sel of selects) {
+        try {
+          const opts = Array.from(sel.querySelectorAll('option'));
+          const target = opts.find((o) => (o.value || '') !== (sel.value || '')) || opts[0];
+          if (target) {
+            for (const o of opts) o.selected = o === target;
+          }
+          sel.dispatchEvent(new window.Event('change', { bubbles: true }));
+        } catch (e) { /* best effort */ }
+      }
+    })();
+  `,
+    ctx
+  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
   const controls = Array.from(document.querySelectorAll('button, select'));
   for (const ctrl of controls) dispatchControlEvent(ctrl, window);
-  // Click every anchor too — the sortable table header anchors wire into
-  // sortTable(key) with preventDefault (L2746-2747). Running this inside
-  // the vm so in-IIFE listeners fire.
   vm.runInContext(
     `
     (() => {
