@@ -1485,6 +1485,85 @@ test('iife-harness: filter inputs + quota-throwing storage trigger requestRender
   }
 });
 
+test('iife-harness: import invalid JSON → early return with invalid-file log', async () => {
+  const { ctx, window, document } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  await startAndDrain(ctx, window, 4);
+  const inputs = Array.from(document.querySelectorAll('input[type="file"]'));
+  for (const input of inputs) {
+    const stubFile = {
+      name: 'bad.json',
+      text: async () => '{ not valid JSON',
+    };
+    Object.defineProperty(input, 'files', { value: [stubFile], configurable: true });
+    try {
+      input.dispatchEvent(new window.Event('change', { bubbles: true }));
+    } catch {
+      /* best effort */
+    }
+  }
+  await drainMicrotasks(4);
+});
+
+test('iife-harness: import with pageLink mismatch + confirm rejects → early return', async () => {
+  const importable = {
+    version: 2,
+    schemaVersion: 2,
+    storageLevel: 'full',
+    savedAt: Date.now(),
+    pageLink: 'https://different.example.com/list',
+    scanMode: 'list',
+    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
+    scanStartPage: 1,
+    pageQueue: [],
+    deferred: [],
+    inFlightPages: [],
+    seenProblemIds: [],
+    problems: [],
+    stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
+  };
+  const { ctx, window, document } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  // confirm returns false → user declines the remap → import exits early.
+  window.confirm = () => false;
+  ctx.confirm = window.confirm;
+  await startAndDrain(ctx, window, 4);
+  const inputs = Array.from(document.querySelectorAll('input[type="file"]'));
+  for (const input of inputs) {
+    const stubFile = {
+      name: 'other.json',
+      text: async () => JSON.stringify(importable),
+    };
+    Object.defineProperty(input, 'files', { value: [stubFile], configurable: true });
+    try {
+      input.dispatchEvent(new window.Event('change', { bubbles: true }));
+    } catch {
+      /* best effort */
+    }
+  }
+  await drainMicrotasks(4);
+});
+
 test('iife-harness: import JSON + quota-throwing storage → import failed branch', async () => {
   const importable = {
     version: 2,
