@@ -3452,6 +3452,30 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       }
     }
 
+    // Shared Cloudflare-block handler for the two fetch callers (list page +
+    // id-range score batch). The callers pass their retry function and
+    // finalize / abort hooks; this helper centralises the retry-or-give-up
+    // decision tree (qlty duplication at L3518-3538 + L3854-3870).
+    function handleCloudflareBlock({
+      retryCount,
+      maxRetries,
+      beforeRetryLog,
+      retryFn,
+      finishReason,
+    }) {
+      noteAdaptiveFailure('blocked');
+      if (retryCount < maxRetries) {
+        const delay = getRetryDelayMs(retryCount);
+        if (typeof beforeRetryLog === 'function') beforeRetryLog(delay);
+        finalize();
+        setTimeout(() => retryFn(retryCount + 1), delay);
+        return 'retrying';
+      }
+      finalize();
+      finishScan({ complete: false, reason: finishReason });
+      return 'finished';
+    }
+
     const parseHtmlDocumentLocal = (responseText) => parseHtmlDocument(responseText);
 
     const getRetryDelayLabel = formatRetryDelayLabel;
@@ -3516,23 +3540,19 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           }
 
           if (isLikelyPbinfoBlockedHtml(responseText)) {
-            noteAdaptiveFailure('blocked');
-            if (retryCount < maxRetriesPerPage) {
-              const delay = getRetryDelayMs(retryCount);
-              if (!idRangeWarnedAboutScoreBatch) {
-                idRangeWarnedAboutScoreBatch = true;
-                addLog(
-                  '<span style="color:#b35c00;"><b>Atenție:</b> am detectat o pagină de verificare (posibil Cloudflare) la request-ul de scoruri (batch). Folosește delay mai mare / concurență mai mică.</span>'
-                );
-              }
-              finalize();
-              setTimeout(() => fetchIdRangeScoreBatch(batchStart, retryCount + 1), delay);
-              return;
-            }
-            finalize();
-            finishScan({
-              complete: false,
-              reason:
+            handleCloudflareBlock({
+              retryCount,
+              maxRetries: maxRetriesPerPage,
+              beforeRetryLog: () => {
+                if (!idRangeWarnedAboutScoreBatch) {
+                  idRangeWarnedAboutScoreBatch = true;
+                  addLog(
+                    '<span style="color:#b35c00;"><b>Atenție:</b> am detectat o pagină de verificare (posibil Cloudflare) la request-ul de scoruri (batch). Folosește delay mai mare / concurență mai mică.</span>'
+                  );
+                }
+              },
+              retryFn: (next) => fetchIdRangeScoreBatch(batchStart, next),
+              finishReason:
                 'Blocare detectată la fetch-ul de scoruri (batch). Încearcă delay mai mare și/sau concurență mai mică.',
             });
             return;
@@ -3852,20 +3872,16 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           const unitLabel = scanMode === 'id-range' ? `ID ${pageIndex}` : `pagina ${pageIndex}`;
 
           if (isLikelyPbinfoBlockedHtml(responseText)) {
-            noteAdaptiveFailure('blocked');
-            if (retryCount < maxRetriesPerPage) {
-              const delay = getRetryDelayMs(retryCount);
-              addLog(
-                `Serverul a răspuns cu o pagină de verificare (probabil protecție anti-bot) la ${unitLabel}. Reîncerc în ${getRetryDelayLabel(delay)}...`
-              );
-              finalize();
-              setTimeout(() => fetchPage(pageIndex, retryCount + 1), delay);
-              return;
-            }
-            finalize();
-            finishScan({
-              complete: false,
-              reason: `Blocare detectată la ${unitLabel} (posibil Cloudflare). Încearcă delay mai mare și/sau concurență mai mică.`,
+            handleCloudflareBlock({
+              retryCount,
+              maxRetries: maxRetriesPerPage,
+              beforeRetryLog: (delay) => {
+                addLog(
+                  `Serverul a răspuns cu o pagină de verificare (probabil protecție anti-bot) la ${unitLabel}. Reîncerc în ${getRetryDelayLabel(delay)}...`
+                );
+              },
+              retryFn: (next) => fetchPage(pageIndex, next),
+              finishReason: `Blocare detectată la ${unitLabel} (posibil Cloudflare). Încearcă delay mai mare și/sau concurență mai mică.`,
             });
             return;
           }
