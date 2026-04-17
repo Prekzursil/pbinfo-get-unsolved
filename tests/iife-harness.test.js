@@ -1372,6 +1372,27 @@ test('iife-harness: overlay=true + closeOverlay exercise the overlay teardown br
   await drainMicrotasks(4);
 });
 
+test('iife-harness: list mode with off-origin pageLink fires validated=null early-return', async () => {
+  // pageLink is http:// -> buildPageUrl returns http:// URL -> safePbinfoFetchUrl
+  // rejects protocol -> L3846-3849 finalize + return.
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'list',
+      ...SHORT_SCAN_OVERRIDES,
+    },
+  });
+  // Override the prompt to return an http:// URL on the link prompt.
+  window.prompt = (_m, fallback) => {
+    if (fallback && fallback.includes('pagina')) return 'http://www.pbinfo.ro/probleme';
+    return fallback ?? 'http://www.pbinfo.ro/probleme';
+  };
+  ctx.prompt = window.prompt;
+  ctx.location = { href: 'http://www.pbinfo.ro/', origin: 'http://www.pbinfo.ro' };
+  window.location = ctx.location;
+  await startAndDrain(ctx, window, 4);
+});
+
 test('iife-harness: id-range with off-origin location throws the safeFetchUrl-null branch', async () => {
   // Set ctx.location to a non-https origin; safePbinfoFetchUrl returns null
   // for the id-range URL built from location.origin, firing the L3856-3859
