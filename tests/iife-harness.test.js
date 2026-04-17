@@ -25,9 +25,7 @@ const LIBRARY_PATH = path.resolve(__dirname, '..', 'pbinfo-get-unsolved-enhanced
 const LIBRARY_SOURCE = fs.readFileSync(LIBRARY_PATH, 'utf8');
 
 function loadLibraryInto(ctx) {
-  // NOSONAR: S1523 — intentional load of our own source into a vm context
-  // for branch-coverage purposes; no user input is ever evaluated.
-  vm.runInContext(LIBRARY_SOURCE, ctx, { filename: LIBRARY_PATH });
+  vm.runInContext(LIBRARY_SOURCE, ctx, { filename: LIBRARY_PATH }); // NOSONAR: javascript:S1523 — executing our own pinned library source (read once at module load) in an isolated vm context for branch-coverage purposes; never evaluates user input.
 }
 
 function buildContext({ modeOverrides = {}, fetchResponse } = {}) {
