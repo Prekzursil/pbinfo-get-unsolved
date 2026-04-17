@@ -348,6 +348,39 @@ test('iife-harness: list debug scan with unattempted card hits debugDumpCard wit
   await startAndDrain(ctx, window, 8);
 });
 
+test('iife-harness: multi-page list scan exercises queue progression + finishScan complete', async () => {
+  function makePage(id) {
+    return `<!doctype html><html><body>
+      <span class="numar_probleme">30</span>
+      <div class="row">
+        <div class="card mb-3">
+          <code>#${id}</code>
+          <a href="/probleme/${id}/x" class="text-dark"><h5>#${id} x</h5></a>
+          <div class="card-footer"><span class="badge" title="Punctaj obtinut">50</span></div>
+        </div>
+      </div>
+    </body></html>`;
+  }
+  let n = 0;
+  const ids = [1, 2, 3];
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 3,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+    },
+  });
+  window.fetch = () => {
+    const body = n < ids.length ? makePage(ids[n]) : '<body>Pagina nu exista.</body>';
+    n += 1;
+    return Promise.resolve({ ok: true, status: 200, text: async () => body });
+  };
+  ctx.fetch = window.fetch;
+  await startAndDrain(ctx, window, 14);
+});
+
 test('iife-harness: list scan with MAX_PAGES < total hits the cap warning', async () => {
   // A numar_probleme of 500 with page size 10 implies 50 pages. MAX_PAGES=1
   // triggers the "totalPages exceeds maxPages" addLog branch.
