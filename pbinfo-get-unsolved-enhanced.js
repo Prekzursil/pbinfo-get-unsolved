@@ -3661,10 +3661,11 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       stats.pages++;
       idRangeConsecutiveMissing = 0;
 
-      const status = scoreValue >= 100 ? 'solved' : 'tried';
+      // processIdRangeFromScoreBatch is only called with scoreValue >= 100
+      // (see the caller at L3788), so the 'tried' branch is unreachable
+      // under current control flow. Tracked stats.solved directly.
       if (addIdRangeProblemEntry(problemId, scoreValue)) {
-        if (status === 'solved') stats.solved++;
-        else stats.tried++;
+        stats.solved++;
         stats.total++;
       }
 
