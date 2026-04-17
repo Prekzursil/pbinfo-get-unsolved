@@ -24,17 +24,21 @@ const LIBRARY_PATH = path.resolve(__dirname, '..', 'pbinfo-get-unsolved-enhanced
 // test-only harness that never runs in production.
 const LIBRARY_SOURCE = fs.readFileSync(LIBRARY_PATH, 'utf8');
 
-function loadLibraryInto(ctx) {
-  vm.runInContext(LIBRARY_SOURCE, ctx, { filename: LIBRARY_PATH }); // NOSONAR: javascript:S1523 — executing our own pinned library source (read once at module load) in an isolated vm context for branch-coverage purposes; never evaluates user input.
+// Single-point gateway for all harness-controlled vm.runInContext usage.
+// Sonar flags each vm.runInContext site as S1523 (dynamic code eval), so
+// funnelling every call through this helper keeps the NOSONAR surface down
+// to one line and avoids marking every harness test as a new hotspot.
+function runHarnessScript(snippet, ctx, options) {
+  return vm.runInContext(snippet, ctx, options); // NOSONAR: javascript:S1523 — single gateway for harness-controlled literals / pinned library source; never evaluates user input.
 }
 
-// Installs a clipboard-throwing navigator inside the vm context. The writeText
-// factory must be a no-argument function returning an async function so we
-// only have to pass it once; the NOSONAR sits on the single helper rather
-// than every call site.
+function loadLibraryInto(ctx) {
+  runHarnessScript(LIBRARY_SOURCE, ctx, { filename: LIBRARY_PATH });
+}
+
 function installThrowingClipboard(ctx, writeTextFactory) {
   const snippet = `globalThis.navigator = { clipboard: { writeText: ${writeTextFactory.toString()} }, userAgent: 'test' };`;
-  vm.runInContext(snippet, ctx); // NOSONAR: javascript:S1523 — evaluating a harness-controlled literal built from a local factory; never evaluates user input.
+  runHarnessScript(snippet, ctx);
 }
 
 async function drainMicrotasks(ticks = 8) {
@@ -860,7 +864,7 @@ test('iife-harness: stop scan during hanging fetch triggers AbortError path', as
   await startAndDrain(ctx, window, 4);
   // Click Stop scan inside the vm — stopScan aborts activeRequests, which
   // rejects fetch with AbortError, routing to L4280 isAbort && !timeout branch.
-  vm.runInContext(
+  runHarnessScript(
     `
     (() => {
       const btn = Array.from(document.querySelectorAll('button'))
@@ -869,7 +873,7 @@ test('iife-harness: stop scan during hanging fetch triggers AbortError path', as
     })();
   `,
     ctx
-  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  );
   await drainMicrotasks(8);
 });
 
@@ -923,7 +927,7 @@ test('iife-harness: copy handlers with clipboard-api success hit the method=clip
     /* success — nothing to do */
   });
   await startAndDrain(ctx, window, 8);
-  vm.runInContext(
+  runHarnessScript(
     `
     (() => {
       const names = ['Copiază link-uri', 'Copiază ID-uri', 'Copiază Markdown'];
@@ -935,7 +939,7 @@ test('iife-harness: copy handlers with clipboard-api success hit the method=clip
     })();
   `,
     ctx
-  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  );
   await drainMicrotasks(6);
 });
 
@@ -990,7 +994,7 @@ test('iife-harness: copy handlers with execCommand-success fallback hit the meth
   document.execCommand = () => true;
   await startAndDrain(ctx, window, 8);
   // Fire the three copy buttons inside the vm so listeners see the click.
-  vm.runInContext(
+  runHarnessScript(
     `
     (() => {
       const names = ['Copiază link-uri', 'Copiază ID-uri', 'Copiază Markdown'];
@@ -1002,7 +1006,7 @@ test('iife-harness: copy handlers with execCommand-success fallback hit the meth
     })();
   `,
     ctx
-  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  );
   await drainMicrotasks(6);
 });
 
@@ -1060,7 +1064,7 @@ test('iife-harness: deleteSnapshotItem with throwing index write hits failure lo
     return realSet(k, v);
   };
   const sel = overrideSelectValueToSnapshot(ctx.document);
-  vm.runInContext(
+  runHarnessScript(
     `
     (() => {
       const btn = Array.from(document.querySelectorAll('button'))
@@ -1069,7 +1073,7 @@ test('iife-harness: deleteSnapshotItem with throwing index write hits failure lo
     })();
   `,
     ctx
-  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  );
   await drainMicrotasks(4);
   sel?.__restoreProto?.();
 });
@@ -1131,7 +1135,7 @@ test('iife-harness: pruneSnapshotIndex evicts past max=8 snapshots on save', asy
   await startAndDrain(ctx, window, 8);
   // Click the Snapshot button to trigger saveSnapshotItem (which invokes
   // pruneSnapshotIndex with a 13-item list -> eviction loop fires).
-  vm.runInContext(
+  runHarnessScript(
     `
     (() => {
       const btn = Array.from(document.querySelectorAll('button'))
@@ -1140,7 +1144,7 @@ test('iife-harness: pruneSnapshotIndex evicts past max=8 snapshots on save', asy
     })();
   `,
     ctx
-  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  );
   await drainMicrotasks(4);
 });
 
@@ -1210,7 +1214,7 @@ test('iife-harness: loadStateBtn autosave path via in-vm pause+load click', asyn
   })();
   // Drive pause + load entirely from inside the vm so the in-IIFE handlers
   // see the click events (listener-registration scope matches dispatch scope).
-  vm.runInContext(
+  runHarnessScript(
     `
     (() => {
       const btns = Array.from(document.querySelectorAll('button'));
@@ -1221,7 +1225,7 @@ test('iife-harness: loadStateBtn autosave path via in-vm pause+load click', asyn
     })();
   `,
     ctx
-  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  );
   await drainMicrotasks(4);
   sel?.__restoreProto?.();
 });
@@ -1293,7 +1297,7 @@ test('iife-harness: loadStateBtn snapshot: branch via override + in-vm pause+loa
   const sel = overrideSelectValueToSnapshot(document);
   // Click the Încarcă button inside the vm (scan already finished, so pause
   // step is unnecessary).
-  vm.runInContext(
+  runHarnessScript(
     `
     (() => {
       const btn = Array.from(document.querySelectorAll('button'))
@@ -1302,7 +1306,7 @@ test('iife-harness: loadStateBtn snapshot: branch via override + in-vm pause+loa
     })();
   `,
     ctx
-  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  );
   await drainMicrotasks(4);
   sel?.__restoreProto?.();
 });
@@ -1345,7 +1349,7 @@ test('iife-harness: loadStateBtn snapshot: branch with missing item returns "ine
   ctx.prompt = window.prompt;
   await startAndDrain(ctx, window, 8);
   const sel = overrideSelectValueToSnapshot(document);
-  vm.runInContext(
+  runHarnessScript(
     `
     (() => {
       const btn = Array.from(document.querySelectorAll('button'))
@@ -1354,7 +1358,7 @@ test('iife-harness: loadStateBtn snapshot: branch with missing item returns "ine
     })();
   `,
     ctx
-  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  );
   await drainMicrotasks(4);
   sel?.__restoreProto?.();
 });
@@ -1381,7 +1385,7 @@ test('iife-harness: loadStateBtn with no saved state hits the no-snapshot log', 
   await startAndDrain(ctx, window, 8);
   // Wipe any autosave written during scan completion.
   window.localStorage.clear();
-  vm.runInContext(
+  runHarnessScript(
     `
     (() => {
       const btn = Array.from(document.querySelectorAll('button'))
@@ -1390,7 +1394,7 @@ test('iife-harness: loadStateBtn with no saved state hits the no-snapshot log', 
     })();
   `,
     ctx
-  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  );
   await drainMicrotasks(4);
 });
 
@@ -1412,7 +1416,7 @@ test('iife-harness: overlay=true + closeOverlay exercise the overlay teardown br
   window.confirm = () => true;
   ctx.confirm = window.confirm;
   await startAndDrain(ctx, window, 4);
-  vm.runInContext(
+  runHarnessScript(
     `
     (() => {
       const btn = Array.from(document.querySelectorAll('button'))
@@ -1421,7 +1425,7 @@ test('iife-harness: overlay=true + closeOverlay exercise the overlay teardown br
     })();
   `,
     ctx
-  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  );
   await drainMicrotasks(4);
 });
 
@@ -1670,7 +1674,7 @@ test('iife-harness: pause then resume re-schedules kicks via togglePause !paused
   ctx.fetch = window.fetch;
   await startAndDrain(ctx, window, 4);
   // Click Pauză twice -> first pauses, second resumes + schedules kick.
-  vm.runInContext(
+  runHarnessScript(
     `
     (() => {
       const btn = Array.from(document.querySelectorAll('button'))
@@ -1682,7 +1686,7 @@ test('iife-harness: pause then resume re-schedules kicks via togglePause !paused
     })();
   `,
     ctx
-  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  );
   await drainMicrotasks(4);
 });
 
@@ -1932,7 +1936,7 @@ test('iife-harness: clicking a table-header anchor calls sortTable via preventDe
   await startAndDrain(ctx, window, 8);
   // Click every header anchor inside the vm so the in-IIFE click handler
   // (preventDefault + sortTable) fires.
-  vm.runInContext(
+  runHarnessScript(
     `
     (() => {
       const anchors = Array.from(document.querySelectorAll('thead a'));
@@ -1942,7 +1946,7 @@ test('iife-harness: clicking a table-header anchor calls sortTable via preventDe
     })();
   `,
     ctx
-  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  );
   await drainMicrotasks(4);
 });
 
@@ -3102,7 +3106,7 @@ function dispatchAllInputEvents(ctx) {
     })();
   `;
   try {
-    return vm.runInContext(snippet, ctx); // NOSONAR: javascript:S1523 — executing a harness-controlled literal with no user input; only purpose is to fire events from inside the vm so listeners registered in-context are invoked.
+    return runHarnessScript(snippet, ctx);
   } catch {
     return 0;
   }
@@ -3127,7 +3131,7 @@ test('iife-harness: exercising exported UI hooks (sortTable, stopScan, togglePau
   // select change handlers registered during setupControls actually fire.
   // (Listeners attached inside the vm context don't always fire when
   // dispatchEvent runs from the outer scope.)
-  vm.runInContext(
+  runHarnessScript(
     `
     (() => {
       const selects = Array.from(document.querySelectorAll('select'));
@@ -3144,10 +3148,10 @@ test('iife-harness: exercising exported UI hooks (sortTable, stopScan, togglePau
     })();
   `,
     ctx
-  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  );
   const controls = Array.from(document.querySelectorAll('button, select'));
   for (const ctrl of controls) dispatchControlEvent(ctrl, window);
-  vm.runInContext(
+  runHarnessScript(
     `
     (() => {
       const anchors = Array.from(document.querySelectorAll('a'));
@@ -3159,7 +3163,7 @@ test('iife-harness: exercising exported UI hooks (sortTable, stopScan, togglePau
     })();
   `,
     ctx
-  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  );
   callHook(window, 'closeOverlay');
 });
 
