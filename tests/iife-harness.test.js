@@ -239,6 +239,55 @@ test('iife-harness: list scan against a "not found" body runs the response pipel
   }
 });
 
+test('iife-harness: list scan parses a real pbinfo card and drains without hanging', async () => {
+  const body = `<!doctype html><html><body>
+    <div class="row">
+      <div class="card mb-3">
+        <div class="card-header"><code>#1</code></div>
+        <a href="/probleme/1/test" class="text-dark">
+          <h5 class="card-title">Test problem</h5>
+        </a>
+        <div class="card-footer">
+          <span class="badge" title="Punctaj obtinut">50</span>
+        </div>
+      </div>
+    </div>
+    <p>Pagina nu exista.</p>
+  </body></html>`;
+  let fetchCount = 0;
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_PAGE_SIZE: 10,
+    },
+  });
+  window.fetch = () => {
+    fetchCount += 1;
+    // First response carries one card, subsequent return the terminator
+    // body, so the scan drains without recursing into more fetches.
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      text: async () => (fetchCount === 1 ? body : '<body>Pagina nu exista.</body>'),
+    });
+  };
+  ctx.fetch = window.fetch;
+  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
+  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 8; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
 test('iife-harness: list scan against a blocked cloudflare-ish body exercises the retry path', async () => {
   const { ctx, window } = buildContext({
     fetchResponse: {
