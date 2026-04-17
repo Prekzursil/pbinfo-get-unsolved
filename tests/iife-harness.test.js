@@ -53,6 +53,31 @@ async function startAndDrain(ctx, window, ticks = 8) {
   await drainMicrotasks(ticks);
 }
 
+async function dispatchImport(window, document, fileBody, fileName = 'snapshot.json') {
+  const inputs = Array.from(document.querySelectorAll('input[type="file"]'));
+  for (const input of inputs) {
+    const stubFile = { name: fileName, text: async () => fileBody };
+    Object.defineProperty(input, 'files', { value: [stubFile], configurable: true });
+    try {
+      input.dispatchEvent(new window.Event('change', { bubbles: true }));
+    } catch {
+      /* best effort */
+    }
+  }
+  await drainMicrotasks(6);
+}
+
+function clickAllButtons(window, document) {
+  const buttons = Array.from(document.querySelectorAll('button'));
+  for (const btn of buttons) {
+    try {
+      btn.dispatchEvent(new window.Event('click', { bubbles: true }));
+    } catch {
+      /* best effort */
+    }
+  }
+}
+
 function installSequencedFetch(window, ctx, responses) {
   let call = 0;
   window.fetch = () => {
@@ -1532,20 +1557,7 @@ test('iife-harness: import invalid JSON → early return with invalid-file log',
     },
   });
   await startAndDrain(ctx, window, 4);
-  const inputs = Array.from(document.querySelectorAll('input[type="file"]'));
-  for (const input of inputs) {
-    const stubFile = {
-      name: 'bad.json',
-      text: async () => '{ not valid JSON',
-    };
-    Object.defineProperty(input, 'files', { value: [stubFile], configurable: true });
-    try {
-      input.dispatchEvent(new window.Event('change', { bubbles: true }));
-    } catch {
-      /* best effort */
-    }
-  }
-  await drainMicrotasks(4);
+  await dispatchImport(window, document, '{ not valid JSON', 'bad.json');
 });
 
 test('iife-harness: import with pageLink mismatch + confirm rejects → early return', async () => {
@@ -1581,20 +1593,7 @@ test('iife-harness: import with pageLink mismatch + confirm rejects → early re
   window.confirm = () => false;
   ctx.confirm = window.confirm;
   await startAndDrain(ctx, window, 4);
-  const inputs = Array.from(document.querySelectorAll('input[type="file"]'));
-  for (const input of inputs) {
-    const stubFile = {
-      name: 'other.json',
-      text: async () => JSON.stringify(importable),
-    };
-    Object.defineProperty(input, 'files', { value: [stubFile], configurable: true });
-    try {
-      input.dispatchEvent(new window.Event('change', { bubbles: true }));
-    } catch {
-      /* best effort */
-    }
-  }
-  await drainMicrotasks(4);
+  await dispatchImport(window, document, JSON.stringify(importable), 'other.json');
 });
 
 test('iife-harness: import JSON + quota-throwing storage → import failed branch', async () => {
@@ -1637,23 +1636,7 @@ test('iife-harness: import JSON + quota-throwing storage → import failed branc
   window.confirm = () => true;
   ctx.confirm = window.confirm;
   await startAndDrain(ctx, window, 4);
-  const inputs = Array.from(document.querySelectorAll('input[type="file"]'));
-  for (const input of inputs) {
-    const stubFile = {
-      name: 'snapshot.json',
-      text: async () => JSON.stringify(importable),
-    };
-    Object.defineProperty(input, 'files', {
-      value: [stubFile],
-      configurable: true,
-    });
-    try {
-      input.dispatchEvent(new window.Event('change', { bubbles: true }));
-    } catch {
-      /* best effort */
-    }
-  }
-  await drainMicrotasks(6);
+  await dispatchImport(window, document, JSON.stringify(importable));
 });
 
 test('iife-harness: import JSON flow with a stubbed file triggers saveImportedSnapshot', async () => {
@@ -1690,26 +1673,7 @@ test('iife-harness: import JSON flow with a stubbed file triggers saveImportedSn
   window.confirm = () => true;
   ctx.confirm = window.confirm;
   await startAndDrain(ctx, window, 4);
-  // Find the file input the import button created and feed it a fake file.
-  const inputs = Array.from(document.querySelectorAll('input[type="file"]'));
-  for (const input of inputs) {
-    const stubFile = {
-      name: 'snapshot.json',
-      text: async () => JSON.stringify(importable),
-    };
-    Object.defineProperty(input, 'files', {
-      value: [stubFile],
-      configurable: true,
-    });
-    try {
-      input.dispatchEvent(new window.Event('change', { bubbles: true }));
-    } catch {
-      /* best effort */
-    }
-  }
-  for (let i = 0; i < 6; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await dispatchImport(window, document, JSON.stringify(importable));
 });
 
 test('iife-harness: original pre-seeded snapshot triggers restoreFromSavedState', async () => {
