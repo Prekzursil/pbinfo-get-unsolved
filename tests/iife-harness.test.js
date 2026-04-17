@@ -564,7 +564,9 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
   // getter-only property on HTMLSelectElement, so we shadow it.
   const selects = Array.from(document.querySelectorAll('select'));
   for (const sel of selects) {
-    const snapshotOption = Array.from(sel.options || []).find((o) =>
+    // linkedom's HTMLSelectElement doesn't always expose .options; walk
+    // <option> children directly.
+    const snapshotOption = Array.from(sel.querySelectorAll('option')).find((o) =>
       (o.value || '').startsWith('snapshot:')
     );
     if (snapshotOption) {
