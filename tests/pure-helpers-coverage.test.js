@@ -69,6 +69,20 @@ test('selectScoreFromCandidates: non-finite best.value is rejected', () => {
   assert.deepEqual(res, { userScore: null, maxScore: null });
 });
 
+test('selectScoreFromCandidates: English "max score" tooltip recognized', () => {
+  const res = selectScoreFromCandidates([
+    { tooltip: 'max score', text: '75p', value: 75, max: null, hasRatio: false, isLink: false },
+  ]);
+  assert.deepEqual(res, { userScore: null, maxScore: 75 });
+});
+
+test('selectScoreFromCandidates: "user score" tooltip treated as obtained', () => {
+  const res = selectScoreFromCandidates([
+    { tooltip: 'user score', text: '42p', value: 42, max: null, hasRatio: false, isLink: false },
+  ]);
+  assert.equal(res.userScore, 42);
+});
+
 test('selectScoreFromCandidates: isLink bumps rank', () => {
   const res = selectScoreFromCandidates([
     { tooltip: '', text: '10p', value: 10, max: null, hasRatio: false, isLink: false },
