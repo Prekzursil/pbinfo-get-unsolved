@@ -66,6 +66,18 @@ const SHORT_SCAN_OVERRIDES = {
   PBINFO_GET_UNSOLVED_DELAY_MS: 0,
 };
 
+// Minimal "empty / page-not-found" body that finishScan treats as a
+// terminator — widely re-used by tests that only care about the pipeline
+// completing cleanly.
+const PBINFO_TERMINATOR_BODY = '<body>Pagina nu exista.</body>';
+
+// Pre-built fetchResponse shape for tests that just need a terminator.
+const TERMINATOR_FETCH_RESPONSE = {
+  ok: true,
+  status: 200,
+  text: async () => PBINFO_TERMINATOR_BODY,
+};
+
 // Boilerplate for restore-from-snapshot tests: seed keys.full with `snap`,
 // set window.confirm=true, and route the first prompt to listUrl so the
 // IIFE's pageLink matches the key hash. Returns the same { ctx, window }.
@@ -451,11 +463,7 @@ test('iife-harness: restore prompt uses problems.length when stats.total missing
     stats: { solved: 0, tried: 2, unattempted: 0, total: 'not-a-number', pages: 1 },
   });
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -466,11 +474,7 @@ test('iife-harness: restore prompt uses problems.length when stats.total missing
 
 test('iife-harness: iframe setup throws → default-console fallback catch fires', async () => {
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -495,11 +499,7 @@ test('iife-harness: iframe setup throws → default-console fallback catch fires
 
 test('iife-harness: console.clear throwing hits the outer iframe-console catch', async () => {
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -811,11 +811,7 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
   const { ctx, window, document } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -926,11 +922,7 @@ test('iife-harness: copy handlers with clipboard-api success hit the method=clip
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -979,11 +971,7 @@ test('iife-harness: copy handlers with execCommand-success fallback hit the meth
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
   const { ctx, window, document } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -1030,11 +1018,7 @@ test('iife-harness: deleteSnapshotItem with throwing index write hits failure lo
     stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
   });
   const { ctx, window: win } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -1099,11 +1083,7 @@ test('iife-harness: pruneSnapshotIndex evicts past max=8 snapshots on save', asy
     indexItems.push(item);
   }
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -1309,11 +1289,7 @@ test('iife-harness: loadStateBtn snapshot: branch with missing item returns "ine
     storageVersion: 2,
   };
   const { ctx, window, document } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -1352,11 +1328,7 @@ test('iife-harness: loadStateBtn with no saved state hits the no-snapshot log', 
   // localStorage just before the click so loadSavedStateForLink returns
   // null -> L2465-2469 "Nu există stare salvată" log fires.
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -1498,11 +1470,7 @@ test('iife-harness: 200-problem restored snapshot triggers scheduleChunk + clear
   const keys = buildStateKeys(listUrl);
   const snapshot = makeLargeListSnapshot(listUrl);
   const { ctx, window, document } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
       PBINFO_GET_UNSOLVED_RENDER_CHUNK_SIZE: 50,
@@ -1599,11 +1567,7 @@ test('iife-harness: virtualize rows + 200-problem snapshot displays the virtuali
   const keys = buildStateKeys(listUrl);
   const snapshot = makeLargeListSnapshot(listUrl);
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
       PBINFO_GET_UNSOLVED_VIRTUALIZE_ROWS: true,
@@ -1677,11 +1641,7 @@ test('iife-harness: restore with filter.scoreMin/Max seeds input.value at setupC
     searchQuery: 'demo',
   };
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -1708,11 +1668,7 @@ test('iife-harness: restore snapshot with resumeFromPage fallback + empty filter
     searchQuery: '',
   };
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -1763,11 +1719,7 @@ test('iife-harness: legacy v1 snapshot index merges with v2 via loadSnapshotInde
   const keysV2 = buildStateKeys(listUrl, { version: 2 });
   const keysV1 = buildStateKeys(listUrl, { version: 1 });
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -1820,11 +1772,7 @@ test('iife-harness: restore from snapshot with only config.startPage hits the el
   delete snap.scanStartPage;
   snap.config = { startPage: 5 };
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -1840,11 +1788,7 @@ test('iife-harness: clicking a table-header anchor calls sortTable via preventDe
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -1871,11 +1815,7 @@ test('iife-harness: small chunk + 200-problem snapshot triggers scheduleChunk re
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
   const snapshot = makeLargeListSnapshot(listUrl);
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
       // Small chunk + no virtualization -> renderChunk reschedules 4+ times
@@ -1896,11 +1836,7 @@ test('iife-harness: small chunk + 200-problem snapshot triggers scheduleChunk re
 
 test('iife-harness: DELAY_MS > 0 makes schedule() route through setTimeout', async () => {
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
       PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
@@ -1932,11 +1868,7 @@ test('iife-harness: copyTextToClipboard fallback branches via clipboard-throws +
   const keys = buildStateKeys(listUrl);
   const snapshot = makeLargeListSnapshot(listUrl);
   const { ctx, window, document } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -1972,11 +1904,7 @@ test('iife-harness: copyTextToClipboard fully-failed fallback → describeClipbo
   const keys = buildStateKeys(listUrl);
   const snapshot = makeLargeListSnapshot(listUrl);
   const { ctx, window, document } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -2098,11 +2026,7 @@ test('iife-harness: snapshot with deferred/pageQueue/nextSequentialPage exercise
     stats: { solved: 0, tried: 3, unattempted: 0, total: 3, pages: 1 },
   });
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -2126,11 +2050,7 @@ test('iife-harness: minimal-snapshot restore logs the compact-state notice', asy
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -2281,11 +2201,7 @@ test('iife-harness: list-mode "invalid request" body → dedicated Invalid reque
 
 test('iife-harness: mode-prompt returning null aborts the start', async () => {
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       PBINFO_GET_UNSOLVED_MODE_PROMPT: true,
       PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
@@ -2503,11 +2419,7 @@ test('iife-harness: no-requestAnimationFrame path exercises scheduleChunk setTim
   const keys = buildStateKeys(listUrl);
   const snapshot = makeLargeListSnapshot(listUrl);
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
       PBINFO_GET_UNSOLVED_RENDER_CHUNK_SIZE: 50,
@@ -2573,11 +2485,7 @@ test('iife-harness: list scan with quota-throwing storage + autosave every=1 dis
 
 test('iife-harness: filter inputs + quota-throwing storage trigger requestRenderResults + noteStorageFailure', async () => {
   const { ctx, window, document } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
       PBINFO_GET_UNSOLVED_AUTOSAVE: true,
@@ -2628,11 +2536,7 @@ test('iife-harness: filter inputs + quota-throwing storage trigger requestRender
 
 test('iife-harness: import invalid JSON → early return with invalid-file log', async () => {
   const { ctx, window, document } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -2643,11 +2547,7 @@ test('iife-harness: import invalid JSON → early return with invalid-file log',
 
 test('iife-harness: import with file.text() throwing hits the catch branch', async () => {
   const { ctx, window, document } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -2659,11 +2559,7 @@ test('iife-harness: import with file.text() throwing hits the catch branch', asy
 test('iife-harness: import with pageLink mismatch + confirm rejects → early return', async () => {
   const importable = makeEmptySnapshot('https://different.example.com/list');
   const { ctx, window, document } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -2678,11 +2574,7 @@ test('iife-harness: import with pageLink mismatch + confirm rejects → early re
 test('iife-harness: import JSON + quota-throwing storage → import failed branch', async () => {
   const importable = makeEmptySnapshot();
   const { ctx, window, document } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -2709,11 +2601,7 @@ test('iife-harness: import JSON flow with a stubbed file triggers saveImportedSn
     stats: { solved: 1, tried: 0, unattempted: 0, total: 1, pages: 1 },
   });
   const { ctx, window, document } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -2736,11 +2624,7 @@ test('iife-harness: restore minimal-only saved state hits kind=minimal note log'
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -2770,11 +2654,7 @@ test('iife-harness: restore progress-level saved state hits kind=minimal+progres
     stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
   });
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -2798,11 +2678,7 @@ test('iife-harness: import with storage.setItem throwing on index writes logs sa
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
   const { ctx, window, document } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -2832,11 +2708,7 @@ test('iife-harness: import minimal-level snapshot hits the minimal fallback chai
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
   const { ctx, window, document } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -2854,11 +2726,7 @@ test('iife-harness: import progress-level snapshot hits the progress-only chain'
     stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
   });
   const { ctx, window, document } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
@@ -2878,11 +2746,7 @@ test('iife-harness: original pre-seeded snapshot triggers restoreFromSavedState'
   const keys = buildStateKeys(listUrl);
   const snapshot = makeEmptySnapshot(listUrl);
   const { ctx, window } = buildContext({
-    fetchResponse: {
-      ok: true,
-      status: 200,
-      text: async () => '<body>Pagina nu exista.</body>',
-    },
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
     modeOverrides: {
       ...SHORT_SCAN_OVERRIDES,
     },
