@@ -1059,6 +1059,45 @@ test('iife-harness: list scan with LIVE_RENDER=true + fully-decorated card exerc
   await startAndDrain(ctx, window, 8);
 });
 
+test('iife-harness: minimal-snapshot restore logs the compact-state notice', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const snapshot = {
+    version: 2,
+    schemaVersion: 2,
+    storageLevel: 'minimal',
+    savedAt: Date.now(),
+    pageLink: listUrl,
+    scanMode: 'list',
+    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
+    scanStartPage: 1,
+    pageQueue: [],
+    deferred: [],
+    inFlightPages: [],
+    seenProblemIds: [],
+    problems: [{ id: 1, name: 'p1', link: '/1', status: 'tried', userScore: 50, maxScore: 100 }],
+    stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
+  };
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  // Seed under minimal key so restore picks it as 'minimal' kind.
+  window.localStorage.setItem(keys.minimal, JSON.stringify(snapshot));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  await startAndDrain(ctx, window, 6);
+});
+
 test('iife-harness: id-range snapshot restore covers the id-range branch of restoreFromSavedState', async () => {
   const listUrl = 'id-range:https://www.pbinfo.ro:1-1';
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
