@@ -1325,6 +1325,14 @@ test('iife-harness: virtualize rows + 200-problem snapshot displays the virtuali
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
   window.confirm = () => true;
   ctx.confirm = window.confirm;
+  // Route the link prompt to listUrl so pageLink matches seeded keys.
+  let pcall = 0;
+  window.prompt = (_m, fallback) => {
+    pcall += 1;
+    if (pcall === 1) return listUrl;
+    return fallback ?? '';
+  };
+  ctx.prompt = window.prompt;
   await startAndDrain(ctx, window, 10);
   // Trigger updateTable explicitly via sortTable — the 200-problem list
   // routed through filterProblems exceeds VIRTUAL_ROWS_LIMIT=50 so the
@@ -1335,6 +1343,46 @@ test('iife-harness: virtualize rows + 200-problem snapshot displays the virtuali
     /* ignore */
   }
   await drainMicrotasks(6);
+});
+
+test('iife-harness: small chunk + 200-problem snapshot triggers scheduleChunk reschedule', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const snapshot = makeLargeListSnapshot(listUrl);
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      // Small chunk + no virtualization -> renderChunk reschedules 4+ times
+      // via rAF to render the full 200-row list (covers L2860 scheduleChunk
+      // + the inner idx<list.length return L2861).
+      PBINFO_GET_UNSOLVED_RENDER_CHUNK_SIZE: 50,
+    },
+  });
+  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  let pcall = 0;
+  window.prompt = (_m, fallback) => {
+    pcall += 1;
+    if (pcall === 1) return listUrl;
+    return fallback ?? '';
+  };
+  ctx.prompt = window.prompt;
+  await startAndDrain(ctx, window, 12);
+  try {
+    window.sortTable?.('id');
+  } catch {
+    /* ignore */
+  }
+  await drainMicrotasks(12);
 });
 
 test('iife-harness: DELAY_MS > 0 makes schedule() route through setTimeout', async () => {
