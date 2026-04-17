@@ -1355,6 +1355,26 @@ test('iife-harness: id-range 403 with batch-populated score hits the knownIdRang
   await startAndDrain(ctx, window, 12);
 });
 
+test('iife-harness: id-range with delay=0 + concurrency=2 hits the aggressive-scan warning', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: false,
+      status: 404,
+      text: async () => 'Pagina nu exista.',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'id-range',
+      PBINFO_GET_UNSOLVED_ID_START: 1,
+      PBINFO_GET_UNSOLVED_ID_END: 2,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: false,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 2,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+    },
+  });
+  await startAndDrain(ctx, window, 8);
+});
+
 test('iife-harness: id-range 403 forbidden response walks the forbidden-skip branch', async () => {
   const { ctx, window } = buildContext({
     fetchResponse: {
