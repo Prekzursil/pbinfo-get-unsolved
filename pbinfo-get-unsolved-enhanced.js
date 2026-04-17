@@ -4282,9 +4282,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           noteAdaptiveFailure('network');
           if (retryCount < maxRetriesPerPage) {
             const delay = getRetryDelayMs(retryCount);
-            addLog(
-              formatFetchRetryLog(unitLabel, getRetryDelayLabel(delay), timeoutTriggered)
-            );
+            addLog(formatFetchRetryLog(unitLabel, getRetryDelayLabel(delay), timeoutTriggered));
             setTimeout(() => fetchPage(pageIndex, retryCount + 1), delay);
             return;
           }

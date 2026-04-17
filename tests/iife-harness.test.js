@@ -838,7 +838,7 @@ test('iife-harness: pruneSnapshotIndex evicts past max=8 snapshots on save', asy
     };
     indexItems.push(item);
   }
-  const { ctx, window, document } = buildContext({
+  const { ctx, window } = buildContext({
     fetchResponse: {
       ok: true,
       status: 200,
@@ -1012,10 +1012,12 @@ test('iife-harness: loadStateBtn snapshot: branch via override + in-vm pause+loa
   // With hanging fetch, inFlight becomes 1 -> we need the in-flight guard to
   // pass. So use a fetch that resolves to a terminator body so scan
   // finishes cleanly (finished=true, inFlight=0), then load can run.
-  window.fetch = () => Promise.resolve({
-    ok: true, status: 200,
-    text: async () => '<body>Pagina nu exista.</body>',
-  });
+  window.fetch = () =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    });
   ctx.fetch = window.fetch;
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
   window.localStorage.setItem(keys.index, JSON.stringify([indexItem]));
@@ -1063,7 +1065,8 @@ test('iife-harness: loadStateBtn snapshot: branch with missing item returns "ine
   };
   const { ctx, window, document } = buildContext({
     fetchResponse: {
-      ok: true, status: 200,
+      ok: true,
+      status: 200,
       text: async () => '<body>Pagina nu exista.</body>',
     },
     modeOverrides: {

@@ -52,8 +52,5 @@ test('safePbinfoFetchUrl: malformed URL that throws in parser returns null (catc
 });
 
 test('safePbinfoFetchUrl: custom base still enforces host allow-list', () => {
-  assert.equal(
-    safePbinfoFetchUrl('/x', { base: 'https://evil.example.com/' }),
-    null
-  );
+  assert.equal(safePbinfoFetchUrl('/x', { base: 'https://evil.example.com/' }), null);
 });
