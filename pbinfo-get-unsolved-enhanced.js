@@ -938,12 +938,23 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
   }
 } else {
   function runPbinfoGetUnsolved() {
-    // restore console
-    var iFrame = document.createElement('iframe');
-    iFrame.style.display = 'none';
-    document.body.appendChild(iFrame);
-    window.console = iFrame.contentWindow.console;
-    console.clear();
+    // Attempt to restore a pristine console from a hidden iframe — some
+    // pages override `console` methods. Skip silently if the host DOM can't
+    // provide one (linkedom, test harnesses).
+    try {
+      const iFrame = document.createElement('iframe');
+      iFrame.style.display = 'none';
+      document.body.appendChild(iFrame);
+      const frameConsole = iFrame.contentWindow?.console;
+      if (frameConsole) window.console = frameConsole;
+    } catch {
+      /* keep default console */
+    }
+    try {
+      console.clear();
+    } catch {
+      /* ignore if console.clear is unavailable */
+    }
 
     const STORAGE_NAMESPACE = 'pbinfo-get-unsolved';
     const STATE_STORAGE_VERSION = 2;

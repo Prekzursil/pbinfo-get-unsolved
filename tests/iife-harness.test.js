@@ -71,8 +71,11 @@ function buildContext({ modeOverrides = {}, fetchResponse } = {}) {
   };
   window.cancelAnimationFrame = () => {};
 
-  // User-interaction stubs
-  window.prompt = () => null;
+  // User-interaction stubs — prompt returns a default pbinfo list URL so
+  // the scan gets past the "please enter a URL" guard and exercises the
+  // fetching pipeline instead of exiting early.
+  const LIST_URL = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  window.prompt = (message, fallback) => fallback ?? LIST_URL;
   window.confirm = () => false;
   window.alert = () => {};
 
@@ -114,11 +117,19 @@ function buildContext({ modeOverrides = {}, fetchResponse } = {}) {
     clearTimeout: window.clearTimeout,
     setInterval: window.setInterval,
     clearInterval: window.clearInterval,
+    requestAnimationFrame: window.requestAnimationFrame,
+    cancelAnimationFrame: window.cancelAnimationFrame,
     fetch: window.fetch,
     navigator: window.navigator,
     URL: URL,
     URLSearchParams: URLSearchParams,
     localStorage: window.localStorage,
+    // Expose DOM dialog hooks both on window AND directly in the context
+    // so bare-name calls (`prompt(...)`, `confirm(...)`, `alert(...)`)
+    // inside the IIFE resolve.
+    prompt: window.prompt,
+    confirm: window.confirm,
+    alert: window.alert,
     module: {},
     require,
     AbortController: globalThis.AbortController,
