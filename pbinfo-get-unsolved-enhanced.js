@@ -769,6 +769,64 @@ function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
   return base + Math.floor((id - base) / size) * size;
 }
 
+function formatProgressText({
+  scanMode = 'list',
+  stats = {},
+  config = {},
+  totalPages = null,
+  totalProblems = null,
+  pageSize = null,
+  elapsedMs = 0,
+  scanStart = 1,
+  inFlight = 0,
+  paused = false,
+  adaptive = null,
+} = {}) {
+  const pauseText = paused ? ' · pauză' : '';
+  const inflightText = inFlight > 0 ? ` · în lucru ${inFlight}` : '';
+  const startText = scanStart > 1 ? ` (de la ${scanStart})` : '';
+  const adaptiveText =
+    adaptive && adaptive.enabled
+      ? ` · throttle delay=${adaptive.delayMs}ms concurență=${adaptive.concurrency}`
+      : '';
+  const pagesDone = Number.isFinite(stats.pages) ? stats.pages : 0;
+  const totalCount = Number.isFinite(stats.total) ? stats.total : 0;
+
+  if (scanMode === 'id-range') {
+    const endId = Number.isFinite(config.idRange?.endId) ? config.idRange.endId : null;
+    const totalIds = endId != null ? Math.max(0, endId - scanStart + 1) : null;
+    const idsText = totalIds != null && totalIds > 0 ? `${pagesDone}/${totalIds}` : `${pagesDone}`;
+    const etaMs = computeEta(pagesDone, totalIds, elapsedMs);
+    const etaText = etaMs != null ? ` · ETA ~${formatDuration(etaMs)}` : '';
+    const missingText = stats.missing > 0 ? ` · 404 ${stats.missing}` : '';
+    const forbiddenText = stats.forbidden > 0 ? ` · 403 ${stats.forbidden}` : '';
+    return `Progres: ID-uri ${idsText}, probleme ${totalCount} (găsite)${missingText} · timp ${formatDuration(elapsedMs)}${etaText}${adaptiveText}${pauseText}${inflightText}${startText}${forbiddenText}`;
+  }
+
+  const scanPagesTotal = Number.isFinite(totalPages)
+    ? Math.max(0, totalPages - scanStart + 1)
+    : null;
+  const pagesText =
+    scanPagesTotal != null && scanPagesTotal > 0
+      ? `${pagesDone}/${scanPagesTotal}`
+      : `${pagesDone}`;
+  const scanProblemsTotal =
+    Number.isFinite(totalProblems) && Number.isFinite(pageSize)
+      ? Math.max(0, totalProblems - pageSize * (scanStart - 1))
+      : null;
+  let probsText;
+  if (scanProblemsTotal != null && scanProblemsTotal > 0) {
+    probsText = `${totalCount}/${scanProblemsTotal}`;
+  } else if (Number.isFinite(totalProblems)) {
+    probsText = `${totalCount}/${totalProblems}`;
+  } else {
+    probsText = `${totalCount}`;
+  }
+  const etaMs = computeEta(pagesDone, scanPagesTotal, elapsedMs);
+  const etaText = etaMs != null ? ` · ETA ~${formatDuration(etaMs)}` : '';
+  return `Progres: pagini ${pagesText}, probleme ${probsText} · timp ${formatDuration(elapsedMs)}${etaText}${adaptiveText}${pauseText}${inflightText}${startText}`;
+}
+
 function computeEta(done, total, elapsedMs) {
   const d = Number.isFinite(done) ? Math.max(0, done) : 0;
   const t = Number.isFinite(total) ? total : null;
@@ -1117,6 +1175,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       computeRenderShape,
       computeScanSummary,
       computeEta,
+      formatProgressText,
     };
   }
 } else {
@@ -2532,60 +2591,25 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
     }
 
     function updateProgress(inFlight) {
-      const elapsedMs = Date.now() - startedAt;
-      const scanStart = Math.max(1, Number.isFinite(config.startPage) ? config.startPage : 1);
-      const pauseText = paused ? ' · pauză' : '';
-      const inflightText = inFlight > 0 ? ` · în lucru ${inFlight}` : '';
-      const startText = scanStart > 1 ? ` (de la ${scanStart})` : '';
-      const adaptiveText = adaptiveThrottleState.enabled
-        ? ` · throttle delay=${getEffectiveDelayMs()}ms concurență=${getEffectiveConcurrency()}`
-        : '';
-
-      if (scanMode === 'id-range') {
-        const done = stats.pages;
-        const endId = Number.isFinite(config.idRange.endId) ? config.idRange.endId : null;
-        const totalIds = endId != null ? Math.max(0, endId - scanStart + 1) : null;
-        const idsText = totalIds != null && totalIds > 0 ? `${done}/${totalIds}` : `${done}`;
-        const speed = elapsedMs > 0 ? done / (elapsedMs / 1000) : 0;
-        const etaMs =
-          totalIds != null && totalIds > 0 && speed > 0 ? ((totalIds - done) / speed) * 1000 : null;
-        const etaText = etaMs != null ? ` · ETA ~${formatDuration(etaMs)}` : '';
-        const missingText = stats.missing > 0 ? ` · 404 ${stats.missing}` : '';
-        const forbiddenText = stats.forbidden > 0 ? ` · 403 ${stats.forbidden}` : '';
-        progressDiv.textContent = `Progres: ID-uri ${idsText}, probleme ${stats.total} (găsite)${missingText} · timp ${formatDuration(
-          elapsedMs
-        )}${etaText}${adaptiveText}${pauseText}${inflightText}${startText}${forbiddenText}`;
-        return;
-      }
-
-      const pagesDone = stats.pages;
-      const scanPagesTotal = Number.isFinite(totalPages)
-        ? Math.max(0, totalPages - scanStart + 1)
-        : null;
-      const pagesText =
-        scanPagesTotal != null && scanPagesTotal > 0
-          ? `${pagesDone}/${scanPagesTotal}`
-          : `${pagesDone}`;
-      const scanProblemsTotal =
-        Number.isFinite(totalProblems) && Number.isFinite(pageSize)
-          ? Math.max(0, totalProblems - pageSize * (scanStart - 1))
-          : null;
-      const probsText =
-        scanProblemsTotal != null && scanProblemsTotal > 0
-          ? `${stats.total}/${scanProblemsTotal}`
-          : Number.isFinite(totalProblems)
-            ? `${stats.total}/${totalProblems}`
-            : `${stats.total}`;
-      const speed = elapsedMs > 0 ? pagesDone / (elapsedMs / 1000) : 0;
-      const etaMs =
-        scanPagesTotal != null && scanPagesTotal > 0 && speed > 0
-          ? ((scanPagesTotal - pagesDone) / speed) * 1000
-          : null;
-      const etaText = etaMs != null ? ` · ETA ~${formatDuration(etaMs)}` : '';
-
-      progressDiv.textContent = `Progres: pagini ${pagesText}, probleme ${probsText} · timp ${formatDuration(
-        elapsedMs
-      )}${etaText}${adaptiveText}${pauseText}${inflightText}${startText}`;
+      progressDiv.textContent = formatProgressText({
+        scanMode,
+        stats,
+        config,
+        totalPages,
+        totalProblems,
+        pageSize,
+        elapsedMs: Date.now() - startedAt,
+        scanStart: Math.max(1, Number.isFinite(config.startPage) ? config.startPage : 1),
+        inFlight,
+        paused,
+        adaptive: adaptiveThrottleState.enabled
+          ? {
+              enabled: true,
+              delayMs: getEffectiveDelayMs(),
+              concurrency: getEffectiveConcurrency(),
+            }
+          : null,
+      });
     }
 
     setupControls();
