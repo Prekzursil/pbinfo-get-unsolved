@@ -304,6 +304,24 @@ function normalizeListUrl(inputUrl, baseUrl, paginationParam = 'start') {
   return u.toString();
 }
 
+// Flow-sensitive URL validator used right before `fetch`. Sonar S5144
+// terminates its taint walk here because the function only returns a
+// string when the origin matches the pbinfo allow-list. Returns null
+// on malformed input or off-origin host — callers `finalize()` + return.
+function safePbinfoFetchUrl(candidateUrl, { base = 'https://www.pbinfo.ro/' } = {}) {
+  const raw = candidateUrl == null ? '' : String(candidateUrl);
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw, base);
+    const allowedHosts = new Set(['www.pbinfo.ro', 'pbinfo.ro']);
+    if (parsed.protocol !== 'https:') return null;
+    if (!allowedHosts.has(parsed.host)) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 function buildPageUrl(
   baseUrl,
   { pageIndex, pageSize, mode = 'offset', param = 'start', pageBase = 1 }
@@ -1251,6 +1269,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       formatIdRangeProgressLog,
       formatFetchRetryLog,
       redactScoreCandidates,
+      safePbinfoFetchUrl,
     };
   }
 } else {
@@ -3783,35 +3802,19 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           param: config.pagination.param,
           pageBase: config.pagination.pageBase,
         });
-        // Sonar S5144: validate the list-mode URL before the fetch call.
-        // buildPageUrl is already origin-safe, but this local parse +
-        // allow-list keeps the assertion flow-sensitive so Sonar stops
-        // flagging the eventual `fetch(url, ...)`.
-        try {
-          const parsed = new URL(rawUrl || '', 'https://www.pbinfo.ro/');
-          const allowedHosts = new Set(['www.pbinfo.ro', 'pbinfo.ro']);
-          if (parsed.protocol !== 'https:' || !allowedHosts.has(parsed.host)) {
-            finalize();
-            return;
-          }
-          url = parsed.toString();
-        } catch {
+        // Sonar S5144: validate the list-mode URL via the pure helper.
+        const validated = safePbinfoFetchUrl(rawUrl);
+        if (!validated) {
           finalize();
           return;
         }
+        url = validated;
       }
       // Final allow-list check right at the fetch call site so Sonar's
       // taint tracker (S5144) terminates on a proven-safe url value
       // regardless of which branch above built it.
-      let safeFetchUrl;
-      try {
-        const parsed = new URL(String(url), 'https://www.pbinfo.ro/');
-        if (parsed.protocol !== 'https:' || !['www.pbinfo.ro', 'pbinfo.ro'].includes(parsed.host)) {
-          finalize();
-          return;
-        }
-        safeFetchUrl = parsed.toString();
-      } catch {
+      const safeFetchUrl = safePbinfoFetchUrl(url);
+      if (!safeFetchUrl) {
         finalize();
         return;
       }
