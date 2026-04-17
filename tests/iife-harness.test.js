@@ -694,6 +694,117 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
   }
 });
 
+test('iife-harness: loadStateBtn autosave path via in-vm pause+load click', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const savedAt = Date.now() - 5000;
+  const snapshot = makeEmptySnapshot(listUrl, {
+    savedAt,
+    seenProblemIds: [7],
+    problems: [
+      {
+        id: 7,
+        name: 'Autosave problem',
+        link: '/probleme/7/autosave',
+        difficulty: 1,
+        status: 'tried',
+        userScore: 30,
+        maxScore: 100,
+      },
+    ],
+    stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
+  });
+  const { ctx, window, document } = buildContext({
+    // Have fetch hang (never resolve) so the scan stays running -> togglePause
+    // is NOT a no-op -> paused becomes true -> loadStateBtn guard passes.
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.fetch = () => new Promise(() => {}); // never resolves
+  ctx.fetch = window.fetch;
+  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  window.prompt = (_m, fallback) => fallback ?? listUrl;
+  ctx.prompt = window.prompt;
+  await startAndDrain(ctx, window, 4);
+  // Override select.value to 'autosave' so loadStateBtn enters the else
+  // branch (loadSavedStateForLink -> restoreFromSavedState).
+  const sel = (function () {
+    const s = document.querySelector('select');
+    if (!s) return null;
+    const opts = Array.from(s.querySelectorAll('option'));
+    const auto = opts.find((o) => (o.value || '') === 'autosave');
+    if (!auto) return null;
+    try {
+      const proto = Object.getPrototypeOf(s);
+      const orig = Object.getOwnPropertyDescriptor(proto, 'value');
+      Object.defineProperty(proto, 'value', {
+        configurable: true,
+        get() {
+          return auto.value;
+        },
+      });
+      s.__restoreProto = () => {
+        if (orig) Object.defineProperty(proto, 'value', orig);
+      };
+    } catch {
+      /* best effort */
+    }
+    return s;
+  })();
+  // Drive pause + load entirely from inside the vm so the in-IIFE handlers
+  // see the click events (listener-registration scope matches dispatch scope).
+  vm.runInContext(
+    `
+    (() => {
+      const btns = Array.from(document.querySelectorAll('button'));
+      const pause = btns.find((b) => (b.textContent || '').trim() === 'Pauză');
+      if (pause) pause.dispatchEvent(new window.Event('click', { bubbles: true }));
+      const load = btns.find((b) => (b.textContent || '').trim() === 'Încarcă');
+      if (load) load.dispatchEvent(new window.Event('click', { bubbles: true }));
+    })();
+  `,
+    ctx
+  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  await drainMicrotasks(4);
+  sel?.__restoreProto?.();
+});
+
+test('iife-harness: loadStateBtn with no saved state hits the no-snapshot log', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.fetch = () => new Promise(() => {}); // never resolves, so scan stays running
+  ctx.fetch = window.fetch;
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  await startAndDrain(ctx, window, 4);
+  vm.runInContext(
+    `
+    (() => {
+      const btns = Array.from(document.querySelectorAll('button'));
+      const pause = btns.find((b) => (b.textContent || '').trim() === 'Pauză');
+      if (pause) pause.dispatchEvent(new window.Event('click', { bubbles: true }));
+      const load = btns.find((b) => (b.textContent || '').trim() === 'Încarcă');
+      if (load) load.dispatchEvent(new window.Event('click', { bubbles: true }));
+    })();
+  `,
+    ctx
+  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  await drainMicrotasks(4);
+});
+
 test('iife-harness: overlay=true + closeOverlay exercise the overlay teardown branch', async () => {
   const { ctx, window } = buildContext({
     fetchResponse: {
