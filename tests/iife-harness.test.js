@@ -1488,9 +1488,7 @@ test('iife-harness: restore with filter.scoreMin/Max seeds input.value at setupC
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
   const keys = buildStateKeys(listUrl);
   const snap = makeEmptySnapshot(listUrl, {
-    problems: [
-      { id: 1, name: 'a', link: '/1', status: 'tried', userScore: 50, maxScore: 100 },
-    ],
+    problems: [{ id: 1, name: 'a', link: '/1', status: 'tried', userScore: 50, maxScore: 100 }],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
   snap.filters = {
@@ -1530,9 +1528,7 @@ test('iife-harness: restore snapshot with resumeFromPage fallback + empty filter
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
   const keys = buildStateKeys(listUrl);
   const snap = makeEmptySnapshot(listUrl, {
-    problems: [
-      { id: 2, name: 'r', link: '/2', status: 'tried', userScore: 0, maxScore: 100 },
-    ],
+    problems: [{ id: 2, name: 'r', link: '/2', status: 'tried', userScore: 0, maxScore: 100 }],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
   // Remove nextSequentialPage + add resumeFromPage -> L3381-3383 fallback.
@@ -1669,9 +1665,7 @@ test('iife-harness: restore from snapshot with only config.startPage hits the el
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
   const keys = buildStateKeys(listUrl);
   const snap = makeEmptySnapshot(listUrl, {
-    problems: [
-      { id: 1, name: 'a', link: '/1', status: 'tried', userScore: 10, maxScore: 100 },
-    ],
+    problems: [{ id: 1, name: 'a', link: '/1', status: 'tried', userScore: 10, maxScore: 100 }],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
   // Delete scanStartPage but seed config.startPage so L1606-1607 else-if runs.
@@ -1707,9 +1701,7 @@ test('iife-harness: clicking a table-header anchor calls sortTable via preventDe
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
   const keys = buildStateKeys(listUrl);
   const snap = makeEmptySnapshot(listUrl, {
-    problems: [
-      { id: 1, name: 'a', link: '/1', status: 'tried', userScore: 10, maxScore: 100 },
-    ],
+    problems: [{ id: 1, name: 'a', link: '/1', status: 'tried', userScore: 10, maxScore: 100 }],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
   const { ctx, window } = buildContext({
@@ -2659,9 +2651,7 @@ test('iife-harness: restore minimal-only saved state hits kind=minimal note log'
   // storageLevel 'minimal' hits the "compact / unele metadate pot lipsi" log.
   const snap = makeEmptySnapshot(listUrl, {
     storageLevel: 'minimal',
-    problems: [
-      { id: 3, name: 'mini', link: '/3', status: 'tried', userScore: 30, maxScore: 100 },
-    ],
+    problems: [{ id: 3, name: 'mini', link: '/3', status: 'tried', userScore: 30, maxScore: 100 }],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
   const { ctx, window } = buildContext({
@@ -2727,9 +2717,7 @@ test('iife-harness: restore progress-level saved state hits kind=minimal+progres
 
 test('iife-harness: import with storage.setItem throwing on index writes logs save-failure', async () => {
   const importable = makeEmptySnapshot(undefined, {
-    problems: [
-      { id: 77, name: 'test', link: '/77', status: 'tried', userScore: 0, maxScore: 100 },
-    ],
+    problems: [{ id: 77, name: 'test', link: '/77', status: 'tried', userScore: 0, maxScore: 100 }],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
   const { ctx, window, document } = buildContext({
@@ -2765,9 +2753,7 @@ test('iife-harness: import with storage.setItem throwing on index writes logs sa
 test('iife-harness: import minimal-level snapshot hits the minimal fallback chain', async () => {
   const importable = makeEmptySnapshot(undefined, {
     storageLevel: 'minimal',
-    problems: [
-      { id: 55, name: 'min', link: '/55', status: 'tried', userScore: 25, maxScore: 100 },
-    ],
+    problems: [{ id: 55, name: 'min', link: '/55', status: 'tried', userScore: 25, maxScore: 100 }],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
   const { ctx, window, document } = buildContext({

@@ -24,10 +24,7 @@ test('resolveSnapshotLevels: unknown / missing mode coerces to full', () => {
 });
 
 test('resolveSnapshotLevels: progressOnly=true drops full from the chain', () => {
-  assert.deepEqual(resolveSnapshotLevels('full', { progressOnly: true }), [
-    'minimal',
-    'progress',
-  ]);
+  assert.deepEqual(resolveSnapshotLevels('full', { progressOnly: true }), ['minimal', 'progress']);
 });
 
 test('resolveSnapshotLevels: progressOnly does not affect minimal/progress chains', () => {
