@@ -769,6 +769,11 @@ function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
   return base + Math.floor((id - base) / size) * size;
 }
 
+function formatFetchRetryLog(unitLabel, delayLabel, isTimeout) {
+  if (isTimeout) return `Timeout la ${unitLabel}. Reîncerc în ${delayLabel}...`;
+  return `Eroare de rețea la ${unitLabel}. Reîncerc în ${delayLabel}...`;
+}
+
 function formatIdRangeProgressLog(problemId, stats = {}) {
   const pages = Number.isFinite(stats.pages) ? stats.pages : 0;
   const total = Number.isFinite(stats.total) ? stats.total : 0;
@@ -1232,6 +1237,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       formatProgressText,
       formatVirtualizationBanner,
       formatIdRangeProgressLog,
+      formatFetchRetryLog,
     };
   }
 } else {
@@ -4267,13 +4273,9 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           noteAdaptiveFailure('network');
           if (retryCount < maxRetriesPerPage) {
             const delay = getRetryDelayMs(retryCount);
-            if (timeoutTriggered) {
-              addLog(`Timeout la ${unitLabel}. Reîncerc în ${getRetryDelayLabel(delay)}...`);
-            } else {
-              addLog(
-                `Eroare de rețea la ${unitLabel}. Reîncerc în ${getRetryDelayLabel(delay)}...`
-              );
-            }
+            addLog(
+              formatFetchRetryLog(unitLabel, getRetryDelayLabel(delay), timeoutTriggered)
+            );
             setTimeout(() => fetchPage(pageIndex, retryCount + 1), delay);
             return;
           }
