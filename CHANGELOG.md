@@ -25,11 +25,21 @@ _Nothing yet. See v3.0.0 for the current release._
 - **Promoted pure helpers** out of the browser IIFE so they are testable in
   Node: `safeJsonParse`, `fnv1a32`, `classifyStorageError`, `formatDateTime`,
   `formatDuration`, `normalizeScanMode`, `parseIdRangeInput`,
-  `normalizeSnapshotIndex`, `buildStateKeys`.
-- **New test suites** — 97 tests total, covering both pure helpers
-  (`pure-helpers-coverage`, `promoted-helpers`) and DOM fixtures
-  (`dom-coverage`), plus the extension build pipeline
-  (`extension-build`).
+  `normalizeSnapshotIndex`, `buildStateKeys`, `quicksortByKey`,
+  `toggleSortedState`, `filterProblems`, `parseHtmlDocument`,
+  `shouldEmitDebugDump`, `describeClipboardError`,
+  `projectSnapshotForLevel`, `sanitizeForDebugLog`, `numberToDifficulty`,
+  `difficultyColor`, `statusLabel`, `statusColor`, `formatRetryDelayLabel`,
+  `parseIdRangeScoreValue`, `idRangeBatchStartForId`,
+  `serializeFilterState`, `storageGetJson`, `storageSetJson`,
+  `storageRemove`, `effectiveDelayMs`, `effectiveConcurrency`,
+  `resolveThemeValue`, `loadStoredTheme`, `applyThemeAttribute`.
+- **Linkedom-backed DOM harness** (`tests/iife-harness.test.js`) that boots
+  the browser IIFE under a Node-side window stub to exercise DOM-bound
+  handlers without shipping the code as a separate module.
+- **New test suites** — 220 tests across 13 files covering pure helpers,
+  DOM fixtures, the extension build pipeline, snapshot persistence,
+  response-error paths, and scan-mode orchestration.
 
 ### Changed
 
