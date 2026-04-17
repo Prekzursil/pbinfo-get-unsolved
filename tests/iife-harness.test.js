@@ -524,6 +524,15 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
   for (let i = 0; i < 4; i++) {
     await new Promise((r) => setImmediate(r));
   }
+  // Force a full table render by triggering sortTable('id') which routes
+  // through updateTable — this pulls in the chunk/virtualize paths after
+  // the snapshot restore has already populated allProblems.
+  try {
+    window.sortTable?.('id');
+  } catch {
+    /* ignore */
+  }
+  await drainMicrotasks(4);
 });
 
 test('iife-harness: overlay=true + closeOverlay exercise the overlay teardown branch', async () => {
