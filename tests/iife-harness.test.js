@@ -677,6 +677,82 @@ test('iife-harness: list-mode status 500 response + no retries → finishScan er
   }
 });
 
+test('iife-harness: id-range score-batch 500 response walks the batch-failed branch', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'id-range',
+      PBINFO_GET_UNSOLVED_ID_START: 7,
+      PBINFO_GET_UNSOLVED_ID_END: 7,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: true,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH_SIZE: 200,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+    },
+  });
+  let call = 0;
+  window.fetch = () => {
+    call += 1;
+    // First = 500 score batch; subsequent = 404 so the scan terminates.
+    return Promise.resolve(
+      call === 1
+        ? { ok: false, status: 500, text: async () => 'Internal Server Error' }
+        : { ok: false, status: 404, text: async () => '<body>Pagina nu exista.</body>' }
+    );
+  };
+  ctx.fetch = window.fetch;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 10; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
+test('iife-harness: id-range score-batch cloudflare body walks the batch-blocked branch', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'id-range',
+      PBINFO_GET_UNSOLVED_ID_START: 7,
+      PBINFO_GET_UNSOLVED_ID_END: 7,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: true,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH_SIZE: 200,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+    },
+  });
+  let call = 0;
+  window.fetch = () => {
+    call += 1;
+    return Promise.resolve(
+      call === 1
+        ? {
+            ok: true,
+            status: 200,
+            text: async () =>
+              '<html><body><div class="cf-chl-opt">Attention Required</div></body></html>',
+          }
+        : { ok: false, status: 404, text: async () => '<body>Pagina nu exista.</body>' }
+    );
+  };
+  ctx.fetch = window.fetch;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 10; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
 test('iife-harness: list-mode "invalid request" body → dedicated Invalid request branch', async () => {
   const { ctx, window } = buildContext({
     fetchResponse: {
