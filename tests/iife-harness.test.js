@@ -722,6 +722,35 @@ test('iife-harness: list scan parses a real pbinfo card and drains without hangi
   await startAndDrain(ctx, window, 8);
 });
 
+test('iife-harness: id-range DEBUG + DEBUG_HTML on unattempted page logs problem html', async () => {
+  // unattempted problem page: no #scor_utilizator_problema AND no candidates
+  // -> shouldDebugDump + status==='unattempted' -> DEBUG_HTML branch fires.
+  const problemPage = `<!doctype html><html><body>
+    <h1>#8 Unattempted</h1>
+    <table><tr><td>author</td></tr></table>
+  </body></html>`;
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => problemPage,
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'id-range',
+      PBINFO_GET_UNSOLVED_ID_START: 8,
+      PBINFO_GET_UNSOLVED_ID_END: 8,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: false,
+      PBINFO_GET_UNSOLVED_DEBUG: true,
+      PBINFO_GET_UNSOLVED_DEBUG_HTML: true,
+      PBINFO_GET_UNSOLVED_DEBUG_LIMIT: 5,
+    },
+  });
+  await startAndDrain(ctx, window, 8);
+});
+
 test('iife-harness: id-range scan against a /probleme/N problem page drains', async () => {
   const problemPage = `<!doctype html><html><body>
     <h1>#7 Demo problem</h1>
