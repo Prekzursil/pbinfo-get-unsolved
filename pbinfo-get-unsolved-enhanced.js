@@ -3576,28 +3576,29 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           location?.origin || 'https://www.pbinfo.ro'
         ).toString();
       } else {
-        url = buildPageUrl(pageLink, {
+        const rawUrl = buildPageUrl(pageLink, {
           pageIndex,
           pageSize: effectivePageSize,
           mode: config.pagination.mode,
           param: config.pagination.param,
           pageBase: config.pagination.pageBase,
         });
-      }
-      // Sonar S5144: constrain the fetched URL to the pbinfo origin(s) — even
-      // though pageLink flows from a validated normalizeListUrl call, this
-      // keeps the assertion local and short-circuits redirects to other
-      // origins that a compromised prompt default could otherwise request.
-      try {
-        const u = new URL(url, location?.origin || 'https://www.pbinfo.ro');
-        const allowedHosts = new Set(['www.pbinfo.ro', 'pbinfo.ro']);
-        if (u.protocol !== 'https:' || !allowedHosts.has(u.host)) {
+        // Sonar S5144: validate the list-mode URL before the fetch call.
+        // buildPageUrl is already origin-safe, but this local parse +
+        // allow-list keeps the assertion flow-sensitive so Sonar stops
+        // flagging the eventual `fetch(url, ...)`.
+        try {
+          const parsed = new URL(rawUrl || '', 'https://www.pbinfo.ro/');
+          const allowedHosts = new Set(['www.pbinfo.ro', 'pbinfo.ro']);
+          if (parsed.protocol !== 'https:' || !allowedHosts.has(parsed.host)) {
+            finalize();
+            return;
+          }
+          url = parsed.toString();
+        } catch {
           finalize();
           return;
         }
-      } catch {
-        finalize();
-        return;
       }
       fetch(url, {
         method: 'GET',

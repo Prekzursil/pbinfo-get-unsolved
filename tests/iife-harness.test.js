@@ -216,6 +216,30 @@ test('iife-harness: id-range mode initializes without throwing', () => {
 // only the initialization + id-range + UI-hook exercises; the pure-helper
 // tests already cover all the parsing paths the realistic body would hit.
 
+function callHook(window, name, arg) {
+  const fn = window[name];
+  if (typeof fn !== 'function') return;
+  try {
+    fn(arg);
+  } catch {
+    /* each hook may throw against the bare linkedom DOM; we still
+     * benefit from the function body executing up to the throw. */
+  }
+}
+
+function dispatchControlEvent(btn, window) {
+  try {
+    if (btn.tagName === 'SELECT') {
+      btn.value = 'dark';
+      btn.dispatchEvent(new window.Event('change', { bubbles: true }));
+    } else {
+      btn.dispatchEvent(new window.Event('click', { bubbles: true }));
+    }
+  } catch {
+    /* best effort */
+  }
+}
+
 test('iife-harness: exercising exported UI hooks (sortTable, stopScan, togglePause) after start', () => {
   const { ctx, window, document } = buildContext();
   const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
@@ -225,31 +249,13 @@ test('iife-harness: exercising exported UI hooks (sortTable, stopScan, togglePau
   } catch {
     /* ignore */
   }
-  for (const name of ['sortTable', 'stopScan', 'togglePause', 'closeOverlay']) {
-    const fn = window[name];
-    if (typeof fn === 'function') {
-      try {
-        fn(name === 'sortTable' ? 'id' : undefined);
-      } catch {
-        /* each hook may throw against the bare linkedom DOM; we still
-         * benefit from the function body executing up to the throw. */
-      }
-    }
-  }
-  // Dispatch click events on every button that setupControls wired up.
-  // Each click triggers one of the export / snapshot / theme handlers,
-  // which exercises large spans of the IIFE.
-  const buttons = Array.from(document.querySelectorAll('button, select'));
-  for (const btn of buttons) {
-    try {
-      if (btn.tagName === 'SELECT') {
-        btn.value = 'dark';
-        btn.dispatchEvent(new window.Event('change', { bubbles: true }));
-      } else {
-        btn.dispatchEvent(new window.Event('click', { bubbles: true }));
-      }
-    } catch {
-      /* best effort */
-    }
-  }
+  callHook(window, 'sortTable', 'id');
+  callHook(window, 'stopScan');
+  callHook(window, 'togglePause');
+  callHook(window, 'closeOverlay');
+  // Dispatch click / change events on every button and select that
+  // setupControls wired up. Each event triggers one of the export /
+  // snapshot / theme handlers, which exercises large spans of the IIFE.
+  const controls = Array.from(document.querySelectorAll('button, select'));
+  for (const ctrl of controls) dispatchControlEvent(ctrl, window);
 });
