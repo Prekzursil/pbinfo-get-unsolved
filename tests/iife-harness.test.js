@@ -424,6 +424,39 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
   }
 });
 
+test('iife-harness: overlay=true + closeOverlay exercise the overlay teardown branch', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_OVERLAY: true,
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
+  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 4; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+  try {
+    window.closeOverlay?.();
+  } catch {
+    /* ignore */
+  }
+});
+
 test('iife-harness: original pre-seeded snapshot triggers restoreFromSavedState', async () => {
   // Pre-populate a v2 snapshot for the default list URL. When the scanner
   // starts it will see the stored state and offer to restore, which we
