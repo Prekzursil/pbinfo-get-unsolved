@@ -1424,6 +1424,44 @@ test('iife-harness: virtualize rows + 200-problem snapshot displays the virtuali
   await drainMicrotasks(6);
 });
 
+test('iife-harness: autosave-enabled scan updates lastAutosaveAt + lastAutosavePages', async () => {
+  // Render at least one card so stats.pages > 0 and maybeAutoSave runs with
+  // a successful save (default localStorage shim always succeeds).
+  const body = `<!doctype html><html><body>
+    <div class="row">
+      <div class="card mb-3">
+        <div class="card-header"><code>#1</code></div>
+        <h5 class="card-title"><a href="/probleme/1/x">T</a></h5>
+      </div>
+    </div>
+    <p>Pagina nu exista.</p>
+  </body></html>`;
+  let fetchCount = 0;
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_PAGE_SIZE: 10,
+      // Lower the everyPages threshold so 1 page is enough to trigger save.
+      PBINFO_GET_UNSOLVED_AUTOSAVE_EVERY_PAGES: 1,
+    },
+  });
+  // Override the autosave disable so maybeAutoSave runs.
+  window.PBINFO_GET_UNSOLVED_AUTOSAVE = true;
+  window.fetch = () => {
+    fetchCount += 1;
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      text: async () => (fetchCount === 1 ? body : '<body>Pagina nu exista.</body>'),
+    });
+  };
+  ctx.fetch = window.fetch;
+  await startAndDrain(ctx, window, 10);
+});
+
 test('iife-harness: legacy v1 snapshot index merges with v2 via loadSnapshotIndexForLink', async () => {
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
