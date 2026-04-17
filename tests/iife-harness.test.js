@@ -751,6 +751,72 @@ test('iife-harness: stop scan during hanging fetch triggers AbortError path', as
   await drainMicrotasks(8);
 });
 
+test('iife-harness: copy handlers with clipboard-api success hit the method=clipboard-api branch', async () => {
+  // Seed a 1-problem snapshot so the copy buttons have something to serialize.
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const snapshot = makeEmptySnapshot(listUrl, {
+    savedAt: Date.now(),
+    seenProblemIds: [8],
+    problems: [
+      {
+        id: 8,
+        name: 'Clip',
+        link: '/probleme/8/clip',
+        difficulty: 1,
+        status: 'tried',
+        userScore: 40,
+        maxScore: 100,
+      },
+    ],
+    stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
+  });
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  let pcall = 0;
+  window.prompt = (_m, fallback) => {
+    pcall += 1;
+    if (pcall === 1) return listUrl;
+    return fallback ?? '';
+  };
+  ctx.prompt = window.prompt;
+  // Install a working clipboard.writeText stub inside the vm so the
+  // clipboard-api branch of copyTextViaClipboardApi resolves and L1910
+  // returns { method: 'clipboard-api' }.
+  installThrowingClipboard(ctx, () => async () => {
+    /* success — nothing to do */
+  });
+  await startAndDrain(ctx, window, 8);
+  vm.runInContext(
+    `
+    (() => {
+      const names = ['Copiază link-uri', 'Copiază ID-uri', 'Copiază Markdown'];
+      for (const name of names) {
+        const btn = Array.from(document.querySelectorAll('button'))
+          .find((b) => (b.textContent || '').trim() === name);
+        if (btn) btn.dispatchEvent(new window.Event('click', { bubbles: true }));
+      }
+    })();
+  `,
+    ctx
+  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  await drainMicrotasks(6);
+});
+
 test('iife-harness: copy handlers with execCommand-success fallback hit the method branch', async () => {
   // Seed a 1-problem snapshot so the copy buttons have something to serialize.
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
