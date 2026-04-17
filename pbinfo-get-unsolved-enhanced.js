@@ -3452,6 +3452,35 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
     // id-range score batch). The callers pass their retry function and
     // finalize / abort hooks; this helper centralises the retry-or-give-up
     // decision tree (qlty duplication at L3518-3538 + L3854-3870).
+    function addIdRangeProblemEntry(pageIndex, scoreValue, meta = null) {
+      if (seenProblemIds.has(pageIndex)) return false;
+      seenProblemIds.add(pageIndex);
+      const link = new URL(
+        `/probleme/${pageIndex}`,
+        location?.origin || 'https://www.pbinfo.ro'
+      ).toString();
+      const userScore = Number.isFinite(scoreValue) ? scoreValue : null;
+      const status = userScore != null && userScore >= 100 ? 'solved' : 'tried';
+      allProblems.push({
+        cnt: allProblems.length + 1,
+        id: pageIndex,
+        name: meta?.name || '',
+        link: meta?.link || link,
+        difficulty: meta?.difficulty ?? 3,
+        score: userScore ?? -1,
+        scoreKnown: userScore != null,
+        userScore,
+        maxScore: meta?.maxScore ?? 100,
+        status: meta?.status || status,
+        postedBy_link: meta?.postedBy_link || '',
+        postedBy_name: meta?.postedBy_name || '',
+        postedBy_img: meta?.postedBy_img || '',
+        author: meta?.author || '',
+        source: meta?.source || '',
+      });
+      return true;
+    }
+
     function handleCloudflareBlock({
       retryCount,
       maxRetries,
@@ -3929,28 +3958,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
               knownIdRangeScore != null && Number.isFinite(knownIdRangeScore)
                 ? knownIdRangeScore
                 : null;
-            if (scoreValue != null && !seenProblemIds.has(pageIndex)) {
-              seenProblemIds.add(pageIndex);
-              allProblems.push({
-                cnt: allProblems.length + 1,
-                id: pageIndex,
-                name: '',
-                link: new URL(
-                  `/probleme/${pageIndex}`,
-                  location?.origin || 'https://www.pbinfo.ro'
-                ).toString(),
-                difficulty: 3,
-                score: scoreValue,
-                scoreKnown: true,
-                userScore: scoreValue,
-                maxScore: 100,
-                status: scoreValue >= 100 ? 'solved' : 'tried',
-                postedBy_link: '',
-                postedBy_name: '',
-                postedBy_img: '',
-                author: '',
-                source: '',
-              });
+            if (scoreValue != null && addIdRangeProblemEntry(pageIndex, scoreValue)) {
               if (scoreValue >= 100) stats.solved++;
               else stats.tried++;
               stats.total++;
@@ -4033,30 +4041,20 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
               );
             }
 
-            if (!seenProblemIds.has(pageIndex)) {
-              seenProblemIds.add(pageIndex);
-              const scoreKnown =
-                scoreInfo.userScore != null && Number.isFinite(scoreInfo.userScore);
-              const maxScore = Number.isFinite(scoreInfo.maxScore) ? scoreInfo.maxScore : 100;
-              const score = scoreKnown ? scoreInfo.userScore : -1;
-              allProblems.push({
-                cnt: allProblems.length + 1,
-                id: pageIndex,
+            if (
+              addIdRangeProblemEntry(pageIndex, scoreInfo.userScore, {
                 name: meta.name,
                 link,
                 difficulty: meta.difficulty,
-                score,
-                scoreKnown,
-                userScore: scoreInfo.userScore,
-                maxScore,
+                maxScore: Number.isFinite(scoreInfo.maxScore) ? scoreInfo.maxScore : 100,
                 status,
                 postedBy_link: meta.postedBy_link,
                 postedBy_name: meta.postedBy_name,
                 postedBy_img: meta.postedBy_img,
                 author: meta.author,
                 source: meta.source,
-              });
-
+              })
+            ) {
               if (status === 'solved') stats.solved++;
               else if (status === 'tried') stats.tried++;
               else stats.unattempted++;
