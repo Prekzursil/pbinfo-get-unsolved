@@ -1358,6 +1358,55 @@ test('iife-harness: virtualize rows + 200-problem snapshot displays the virtuali
   await drainMicrotasks(6);
 });
 
+test('iife-harness: clicking a table-header anchor calls sortTable via preventDefault', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const snap = makeEmptySnapshot(listUrl, {
+    problems: [
+      { id: 1, name: 'a', link: '/1', status: 'tried', userScore: 10, maxScore: 100 },
+    ],
+    stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
+  });
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.localStorage.setItem(keys.full, JSON.stringify(snap));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  let pcall = 0;
+  window.prompt = (_m, fallback) => {
+    pcall += 1;
+    if (pcall === 1) return listUrl;
+    return fallback ?? '';
+  };
+  ctx.prompt = window.prompt;
+  await startAndDrain(ctx, window, 8);
+  // Click every header anchor inside the vm so the in-IIFE click handler
+  // (preventDefault + sortTable) fires.
+  vm.runInContext(
+    `
+    (() => {
+      const anchors = Array.from(document.querySelectorAll('thead a'));
+      for (const a of anchors) {
+        a.dispatchEvent(new window.Event('click', { bubbles: true, cancelable: true }));
+      }
+    })();
+  `,
+    ctx
+  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  await drainMicrotasks(4);
+});
+
 test('iife-harness: small chunk + 200-problem snapshot triggers scheduleChunk reschedule', async () => {
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
