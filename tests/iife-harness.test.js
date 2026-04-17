@@ -3333,6 +3333,14 @@ test('iife-harness: list scan with rich card (name anchor + difficulty + posted-
         <h5 class="card-title"><a href="/probleme/45/demo-x">Demo Neclasificat</a></h5>
         <span title="Dificultate">Altceva necunoscut</span>
       </div>
+      <div class="card mb-3">
+        <div class="card-header"><code>#46</code></div>
+        <h5 class="card-title"><a href="/probleme/46/solved">Solved</a></h5>
+        <span title="Dificultate">Ușoară</span>
+        <div class="card-footer">
+          <span class="badge" title="Punctaj obtinut">100/100</span>
+        </div>
+      </div>
     </div>
     <p>Pagina nu exista.</p>
   </body></html>`;
