@@ -793,6 +793,109 @@ test('iife-harness: list-mode empty body with total=5 triggers empty-page retry'
   }
 });
 
+test('iife-harness: copyTextToClipboard fallback branches via clipboard-throws + execCommand stub', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const snapshot = makeLargeListSnapshot(listUrl);
+  const { ctx, window, document } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  // clipboard API throws, execCommand returns true — covers the
+  // execCommand-success branch of copyTextToClipboard.
+  // The navigator reference is shared between window, ctx, and the
+  // library's bare `navigator`; replace its clipboard in place.
+  ctx.navigator.clipboard = {
+    writeText: async () => {
+      throw new Error('denied');
+    },
+  };
+  Object.defineProperty(document, 'execCommand', { value: () => true, configurable: true });
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 4; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+  // Click every button so copyLinks/copyIds/copyMarkdown fire.
+  const buttons = Array.from(document.querySelectorAll('button'));
+  for (const btn of buttons) {
+    try {
+      btn.dispatchEvent(new window.Event('click', { bubbles: true }));
+    } catch {
+      /* ignore */
+    }
+  }
+  for (let i = 0; i < 6; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
+test('iife-harness: copyTextToClipboard fully-failed fallback → describeClipboardError path', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const snapshot = makeLargeListSnapshot(listUrl);
+  const { ctx, window, document } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  window.navigator.clipboard = {
+    writeText: async () => {
+      const err = new Error('denied');
+      err.name = 'NotAllowedError';
+      throw err;
+    },
+  };
+  Object.defineProperty(document, 'execCommand', { value: () => false, configurable: true });
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 4; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+  const buttons = Array.from(document.querySelectorAll('button'));
+  for (const btn of buttons) {
+    try {
+      btn.dispatchEvent(new window.Event('click', { bubbles: true }));
+    } catch {
+      /* ignore */
+    }
+  }
+  for (let i = 0; i < 6; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
 test('iife-harness: cloudflare body with retries left exercises the retry-setTimeout branch', async () => {
   const { ctx, window } = buildContext({
     fetchResponse: {
