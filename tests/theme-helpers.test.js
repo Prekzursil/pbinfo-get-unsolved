@@ -51,30 +51,19 @@ test('loadStoredTheme: throwing storage returns system', () => {
   assert.equal(loadStoredTheme(throwing, 't'), 'system');
 });
 
-test('applyThemeAttribute: system value removes data-theme', () => {
-  const calls = { remove: 0, set: 0 };
-  const el = {
-    removeAttribute: () => (calls.remove += 1),
-    setAttribute: () => (calls.set += 1),
-  };
+test('applyThemeAttribute: system value deletes dataset.theme', () => {
+  const el = { dataset: { theme: 'dark' } };
   applyThemeAttribute(el, 'system');
-  assert.equal(calls.remove, 1);
-  assert.equal(calls.set, 0);
+  assert.equal(el.dataset.theme, undefined);
 });
 
-test('applyThemeAttribute: dark value sets data-theme', () => {
-  const el = {
-    lastSet: null,
-    removeAttribute: () => {},
-    setAttribute: (k, v) => {
-      el.lastSet = { k, v };
-    },
-  };
+test('applyThemeAttribute: dark value sets dataset.theme', () => {
+  const el = { dataset: {} };
   applyThemeAttribute(el, 'dark');
-  assert.deepEqual(el.lastSet, { k: 'data-theme', v: 'dark' });
+  assert.equal(el.dataset.theme, 'dark');
 });
 
-test('applyThemeAttribute: missing el returns resolved value without throwing', () => {
+test('applyThemeAttribute: missing el / dataset returns resolved value without throwing', () => {
   assert.equal(applyThemeAttribute(null, 'dark'), 'dark');
-  assert.equal(applyThemeAttribute({ setAttribute: 'not-a-fn' }, 'dark'), 'dark');
+  assert.equal(applyThemeAttribute({}, 'dark'), 'dark');
 });

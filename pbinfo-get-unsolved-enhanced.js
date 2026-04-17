@@ -972,16 +972,9 @@ function loadStoredTheme(storage = globalThis.localStorage, key = 'pbinfo-get-un
 
 function applyThemeAttribute(targetEl, value) {
   const v = resolveThemeValue(value);
-  if (!targetEl || typeof targetEl.setAttribute !== 'function') return v;
-  // Sonar S6754: prefer dataset over set/removeAttribute for data-*.
-  if (targetEl.dataset) {
-    if (v === 'system') delete targetEl.dataset.theme;
-    else targetEl.dataset.theme = v;
-  } else if (v === 'system') {
-    targetEl.removeAttribute('data-theme');
-  } else {
-    targetEl.setAttribute('data-theme', v);
-  }
+  if (!targetEl?.dataset) return v;
+  if (v === 'system') delete targetEl.dataset.theme;
+  else targetEl.dataset.theme = v;
   return v;
 }
 
