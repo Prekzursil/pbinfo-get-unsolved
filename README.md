@@ -1,61 +1,88 @@
 # pbinfo-get-unsolved
 
-Scanner pentru probleme pbinfo nerezolvate, cu focus pe workflow **userscript-first**.
+Scanner pentru probleme pbinfo nerezolvate, disponibil ca **extensie de browser** (Chrome / Firefox), **userscript**, **bookmarklet** sau direct în consolă.
 
 <img width="1920" height="1080" alt="Screenshot" src="https://github.com/user-attachments/assets/604a2d1d-a318-4e7d-93d3-85603c8aa2ad" />
 
-## Quick Start (Userscript)
+## Quick Start — alege un canal
 
-### 1. Instalează un manager de userscript
+| Canal | Recomandat pentru | Instalare |
+| --- | --- | --- |
+| **Extensie Chrome / Edge / Brave** | Cel mai simplu pe orice Chromium | [`pbinfo-get-unsolved-chrome-vX.Y.Z.zip`](#extensie-chrome) din Releases |
+| **Extensie Firefox (MV3)** | Firefox 115+ | [`pbinfo-get-unsolved-firefox-vX.Y.Z.xpi`](#extensie-firefox) din Releases |
+| **Userscript (Tampermonkey etc.)** | Control complet peste script | `pbinfo-get-unsolved.userscript.js` din Releases |
+| **Bookmarklet** | Setup one-shot, fără manager | `pbinfo-get-unsolved.bookmarklet.txt` |
+| **Consolă dev tools** | Debugging sau rulare ad-hoc | `pbinfo-get-unsolved-enhanced.js` copy-paste |
 
-- Chrome/Edge: Tampermonkey
-- Firefox: Tampermonkey sau Violentmonkey
+### Extensie Chrome
 
-### 2. Instalează userscript-ul
+1. Deschide `chrome://extensions`, activează **Developer mode**.
+2. Dezarhivează `.zip`-ul din Releases și alege **Load unpacked** pe folder.
+3. Navighează la `https://www.pbinfo.ro/`, apasă iconița din toolbar, apoi **Start scan**.
 
-- Dintr-un Release GitHub, descarcă `pbinfo-get-unsolved.userscript.js` și importă-l în manager.
-- Sau deschide direct fișierul din `dist/pbinfo-get-unsolved.userscript.js`.
+### Extensie Firefox
 
-### 3. Rulează scanarea
+1. Deschide `about:debugging#/runtime/this-firefox`.
+2. Click pe **Load Temporary Add-on** și selectează `.xpi`-ul.
+3. Flux identic: pbinfo.ro → iconița din toolbar → **Start scan**.
 
-1. Intră pe `https://www.pbinfo.ro/` și conectează-te.
-2. Vei vedea butonul flotant **Start scan**.
-3. Apasă butonul și urmează prompt-urile:
-   - `1` = scanare listă (paginare)
-   - `2` = scanare interval ID (`/probleme/<id>`)
+Pentru instalare permanentă trebuie să semnezi extensia via [AMO](https://addons.mozilla.org/).
+Cheia `browser_specific_settings.gecko.id` (= `pbinfo-get-unsolved@prekzursil`) este deja pregătită.
 
-Implicit, userscript-ul pornește în overlay non-destructiv (nu îți golește pagina).
+### Userscript
 
-## Fallback: Console
+1. Instalează [Tampermonkey](https://www.tampermonkey.net/) sau
+   [Violentmonkey](https://violentmonkey.github.io/).
+2. Descarcă `pbinfo-get-unsolved.userscript.js` și importă-l în manager.
+3. Intră pe `https://www.pbinfo.ro/` și apasă butonul flotant **Start scan**.
 
-Workflow-ul clasic rămâne suportat complet.
-
-1. Intră pe pbinfo și autentifică-te.
-2. Deschide consola browser (`Ctrl` + `Shift` + `J`).
-3. Rulează conținutul din `pbinfo-get-unsolved-enhanced.js`.
-
-Dacă vrei să controlezi explicit autorun-ul:
-
-```js
-window.PBINFO_GET_UNSOLVED_NO_AUTORUN = true;
-// apoi rulezi scriptul
-window.pbinfoGetUnsolvedStart();
-```
-
-## Fallback: Bookmarklet
+### Bookmarklet
 
 ```bash
 npm ci
 npm run build:bookmarklet
 ```
 
-Se generează:
+Copiază conținutul din `dist/pbinfo-get-unsolved.bookmarklet.txt` în URL-ul unui
+bookmark. Salvează și rulează-l pe pbinfo.
 
-- `dist/pbinfo-get-unsolved.min.js`
-- `dist/pbinfo-get-unsolved.bookmarklet.txt`
-- `dist/pbinfo-get-unsolved.userscript.js`
+### Consolă
 
-Copiază conținutul din `pbinfo-get-unsolved.bookmarklet.txt` în URL-ul unui bookmark și rulează-l pe pbinfo.
+1. Intră pe pbinfo și autentifică-te.
+2. Deschide consola (`Ctrl` + `Shift` + `J`).
+3. Rulează conținutul din `pbinfo-get-unsolved-enhanced.js`.
+
+Pentru a dezactiva pornirea automată:
+
+```js
+window.PBINFO_GET_UNSOLVED_NO_AUTORUN = true;
+// apoi lansezi manual:
+window.pbinfoGetUnsolvedStart();
+```
+
+## Build local
+
+```bash
+npm ci
+npm run build   # userscript + bookmarklet + chrome.zip + firefox.xpi
+```
+
+Output în `dist/`:
+
+- `pbinfo-get-unsolved.userscript.js`
+- `pbinfo-get-unsolved.min.js`
+- `pbinfo-get-unsolved.bookmarklet.txt`
+- `pbinfo-get-unsolved-chrome-vX.Y.Z.zip`
+- `pbinfo-get-unsolved-firefox-vX.Y.Z.xpi`
+
+Testare și coverage:
+
+```bash
+npm test              # node's built-in test runner (fast, no deps)
+npm run test:coverage # c8 lcov + cobertura + json-summary în coverage/
+npm run lint
+npm run format:check
+```
 
 ## Funcționalități
 
@@ -159,10 +186,23 @@ Pentru scanări lungi:
 ```bash
 npm ci
 npm test
+npm run test:coverage
 npm run lint
 npm run format:check
-npm run build:bookmarklet
+npm run build            # userscript + bookmarklet + chrome.zip + firefox.xpi
 ```
+
+## Quality gates
+
+| Semnal | Unde | Țintă |
+| --- | --- | --- |
+| Tests | `npm test` / CI | 100% pass |
+| Coverage | Codecov, Codacy, Sonar, QLTY | 100% line + 100% branch (fără excluderi) |
+| Lint | ESLint | 0 erori |
+| Format | Prettier | 0 diferențe |
+| Securitate | CodeQL, Semgrep, Dependabot | 0 alerte active |
+
+Vezi [`docs/quality/QUALITY_ZERO_GATES.md`](docs/quality/QUALITY_ZERO_GATES.md) pentru detalii.
 
 ## Release artifacts (GitHub)
 
@@ -171,15 +211,10 @@ Workflow-ul `Release` publică automat la tag `v*` (sau manual) următoarele fi�
 - `dist/pbinfo-get-unsolved.userscript.js`
 - `dist/pbinfo-get-unsolved.min.js`
 - `dist/pbinfo-get-unsolved.bookmarklet.txt`
+- `dist/pbinfo-get-unsolved-chrome-vX.Y.Z.zip`
+- `dist/pbinfo-get-unsolved-firefox-vX.Y.Z.xpi`
 - `dist/checksums.sha256`
 
 ## Changelog
 
-### Unreleased
-
-- Userscript-first packaging cu buton persistent **Start scan**.
-- Retry/backoff refactor: exponential backoff + jitter + adaptive throttling.
-- Parsing fetched HTML pe `DOMParser`.
-- Stocare v2 + migrare v1 + import/export snapshot JSON.
-- Căutare în rezultate + randare tabel în chunks + virtualizare best-effort.
-- Pipeline release artifacts + checksums.
+Vezi [`CHANGELOG.md`](CHANGELOG.md). Pe scurt: 3.0.0 aduce extensia Chrome/Firefox și gate-urile Quality Zero la 100% coverage.
