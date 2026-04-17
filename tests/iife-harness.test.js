@@ -305,6 +305,35 @@ test('iife-harness: list scan against a "not found" body runs the response pipel
   }
 });
 
+test('iife-harness: list debug scan with unattempted card hits debugDumpCard with candidates', async () => {
+  const body = `<!doctype html><html><body>
+    <div class="row">
+      <div class="card mb-3">
+        <code>#1</code>
+        <a href="/probleme/1/unattempted" class="text-dark"><h5>#1 unattempted</h5></a>
+        <!-- no score badge → unattempted status, but id IS parseable -->
+      </div>
+    </div>
+    <p>Pagina nu exista.</p>
+  </body></html>`;
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_DEBUG: true,
+      PBINFO_GET_UNSOLVED_DEBUG_DUMP_LIMIT: 5,
+      PBINFO_GET_UNSOLVED_DEBUG_INCLUDE_HTML: false,
+    },
+  });
+  installSequencedFetch(window, ctx, [
+    { ok: true, status: 200, text: async () => body },
+    { ok: true, status: 200, text: async () => '<body>Pagina nu exista.</body>' },
+  ]);
+  await startAndDrain(ctx, window, 8);
+});
+
 test('iife-harness: list scan with debug enabled exercises debugDumpCard on parse failures', async () => {
   const body = `<!doctype html><html><body>
     <div class="row">
