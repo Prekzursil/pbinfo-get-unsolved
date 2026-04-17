@@ -2621,16 +2621,7 @@ test('iife-harness: restore minimal-only saved state hits kind=minimal note log'
       ...SHORT_SCAN_OVERRIDES,
     },
   });
-  window.localStorage.setItem(keys.minimal, JSON.stringify(snap));
-  window.confirm = () => true;
-  ctx.confirm = window.confirm;
-  let pcall = 0;
-  window.prompt = (_m, fallback) => {
-    pcall += 1;
-    if (pcall === 1) return listUrl;
-    return fallback ?? '';
-  };
-  ctx.prompt = window.prompt;
+  seedSnapshotRestore({ ctx, window, listUrl, snap, keysFullOverride: keys.minimal });
   await startAndDrain(ctx, window, 8);
 });
 
@@ -2651,16 +2642,7 @@ test('iife-harness: restore progress-level saved state hits kind=minimal+progres
       ...SHORT_SCAN_OVERRIDES,
     },
   });
-  window.localStorage.setItem(keys.minimal, JSON.stringify(snap));
-  window.confirm = () => true;
-  ctx.confirm = window.confirm;
-  let pcall = 0;
-  window.prompt = (_m, fallback) => {
-    pcall += 1;
-    if (pcall === 1) return listUrl;
-    return fallback ?? '';
-  };
-  ctx.prompt = window.prompt;
+  seedSnapshotRestore({ ctx, window, listUrl, snap, keysFullOverride: keys.minimal });
   await startAndDrain(ctx, window, 8);
 });
 
