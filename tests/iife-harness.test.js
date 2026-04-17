@@ -3093,6 +3093,24 @@ test('iife-harness: id-range start beyond endId hits the start>endId abort', () 
 // they run first. They must remain at the end of this file.
 // =========================================================================
 
+test('iife-harness: DEBUG_IDS=[mixed] covers the .map(parseInt).filter chain', () => {
+  // Don't start the scan — just load the library so the DEBUG_IDS
+  // init expression runs (L1848-1852). parseInt on '77' -> 77, on
+  // 'bogus' -> NaN (filtered by Number.isFinite).
+  const { ctx, window } = buildContext({
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_DEBUG: true,
+      PBINFO_GET_UNSOLVED_DEBUG_IDS: [42, '77', 'bogus', null],
+    },
+  });
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore — just need the init expression to run */
+  }
+});
+
 test('iife-harness: list past-end (startOffset >= total) -> finishScan complete', async () => {
   const pastEndBody =
     '<!doctype html><html><body>' + `<span class="numar_probleme">5</span>` + '</body></html>';
