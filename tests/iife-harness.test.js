@@ -659,6 +659,91 @@ test('iife-harness: 200-problem restored snapshot triggers scheduleChunk + clear
   }
 });
 
+async function runScoreBatchScenarioWithRetries(firstResponse) {
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'id-range',
+      PBINFO_GET_UNSOLVED_ID_START: 7,
+      PBINFO_GET_UNSOLVED_ID_END: 7,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: true,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH_SIZE: 200,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 1,
+    },
+  });
+  let call = 0;
+  window.fetch = () => {
+    call += 1;
+    return Promise.resolve(
+      call === 1
+        ? firstResponse
+        : { ok: false, status: 404, text: async () => '<body>Pagina nu exista.</body>' }
+    );
+  };
+  ctx.fetch = window.fetch;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 10; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+}
+
+test('iife-harness: score-batch cloudflare response with retries remaining takes retry branch', async () => {
+  await runScoreBatchScenarioWithRetries({
+    ok: true,
+    status: 200,
+    text: async () => '<body><div class="cf-chl-opt">Attention Required</div></body>',
+  });
+});
+
+test('iife-harness: score-batch 500 with retries remaining hits the retry branch', async () => {
+  await runScoreBatchScenarioWithRetries({
+    ok: false,
+    status: 500,
+    text: async () => 'ISE',
+  });
+});
+
+test('iife-harness: virtualize rows + 200-problem snapshot displays the virtualization banner', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const snapshot = makeLargeListSnapshot(listUrl);
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_VIRTUALIZE_ROWS: true,
+      PBINFO_GET_UNSOLVED_VIRTUAL_ROWS_LIMIT: 50,
+      PBINFO_GET_UNSOLVED_RENDER_CHUNK_SIZE: 25,
+    },
+  });
+  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 10; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
 test('iife-harness: DELAY_MS > 0 makes schedule() route through setTimeout', async () => {
   const { ctx, window } = buildContext({
     fetchResponse: {
