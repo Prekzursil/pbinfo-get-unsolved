@@ -1555,8 +1555,6 @@ test('iife-harness: score-batch 500 with retries remaining hits the retry branch
 
 test('iife-harness: virtualize rows + 200-problem snapshot displays the virtualization banner', async () => {
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
-  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
-  const keys = buildStateKeys(listUrl);
   const snapshot = makeLargeListSnapshot(listUrl);
   const { ctx, window } = buildContext({
     fetchResponse: TERMINATOR_FETCH_RESPONSE,
@@ -1567,17 +1565,7 @@ test('iife-harness: virtualize rows + 200-problem snapshot displays the virtuali
       PBINFO_GET_UNSOLVED_RENDER_CHUNK_SIZE: 200,
     },
   });
-  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
-  window.confirm = () => true;
-  ctx.confirm = window.confirm;
-  // Route the link prompt to listUrl so pageLink matches seeded keys.
-  let pcall = 0;
-  window.prompt = (_m, fallback) => {
-    pcall += 1;
-    if (pcall === 1) return listUrl;
-    return fallback ?? '';
-  };
-  ctx.prompt = window.prompt;
+  seedSnapshotRestore({ ctx, window, listUrl, snap: snapshot });
   await startAndDrain(ctx, window, 10);
   // Trigger updateTable explicitly via sortTable — the 200-problem list
   // routed through filterProblems exceeds VIRTUAL_ROWS_LIMIT=50 so the
@@ -1742,15 +1730,7 @@ test('iife-harness: legacy v1 snapshot index merges with v2 via loadSnapshotInde
       },
     ])
   );
-  window.confirm = () => true;
-  ctx.confirm = window.confirm;
-  let pcall = 0;
-  window.prompt = (_m, fallback) => {
-    pcall += 1;
-    if (pcall === 1) return listUrl;
-    return fallback ?? '';
-  };
-  ctx.prompt = window.prompt;
+  seedSnapshotRestore({ ctx, window, listUrl, snap: { pageLink: listUrl } });
   await startAndDrain(ctx, window, 8);
 });
 
