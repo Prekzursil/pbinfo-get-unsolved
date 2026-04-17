@@ -408,6 +408,33 @@ test('iife-harness: list scan against a "not found" body runs the response pipel
   }
 });
 
+test('iife-harness: console.clear throwing hits the outer iframe-console catch', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  // Throwing console.clear hits the second try/catch at L1306-1309.
+  ctx.console = {
+    log() {},
+    warn() {},
+    error() {},
+    info() {},
+    debug() {},
+    clear() {
+      throw new Error('no clear');
+    },
+  };
+  await startAndDrain(ctx, window, 4);
+});
+
 test('iife-harness: debug mode with DEBUG_HTML logs the card outerHTML', async () => {
   const body = `<!doctype html><html><body>
     <div class="row">
