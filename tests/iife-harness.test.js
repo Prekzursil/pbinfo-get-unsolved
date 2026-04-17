@@ -713,6 +713,44 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
   }
 });
 
+test('iife-harness: stop scan during hanging fetch triggers AbortError path', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  // Fetch that respects signal.abort — resolves with AbortError when controller
+  // aborts, otherwise hangs forever.
+  window.fetch = (_url, init) =>
+    new Promise((_resolve, reject) => {
+      if (init?.signal) {
+        init.signal.addEventListener('abort', () => {
+          const err = new Error('aborted');
+          err.name = 'AbortError';
+          reject(err);
+        });
+      }
+    });
+  ctx.fetch = window.fetch;
+  await startAndDrain(ctx, window, 4);
+  // Click Stop scan inside the vm — stopScan aborts activeRequests, which
+  // rejects fetch with AbortError, routing to L4280 isAbort && !timeout branch.
+  vm.runInContext(
+    `
+    (() => {
+      const btn = Array.from(document.querySelectorAll('button'))
+        .find((b) => (b.textContent || '').trim() === 'Stop scan');
+      if (btn) btn.dispatchEvent(new window.Event('click', { bubbles: true }));
+    })();
+  `,
+    ctx
+  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  await drainMicrotasks(8);
+});
+
 test('iife-harness: copy handlers with execCommand-success fallback hit the method branch', async () => {
   // Seed a 1-problem snapshot so the copy buttons have something to serialize.
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
@@ -2280,6 +2318,22 @@ test('iife-harness: exercising exported UI hooks (sortTable, stopScan, togglePau
   dispatchAllInputEvents(ctx);
   const controls = Array.from(document.querySelectorAll('button, select'));
   for (const ctrl of controls) dispatchControlEvent(ctrl, window);
+  // Click every anchor too — the sortable table header anchors wire into
+  // sortTable(key) with preventDefault (L2746-2747). Running this inside
+  // the vm so in-IIFE listeners fire.
+  vm.runInContext(
+    `
+    (() => {
+      const anchors = Array.from(document.querySelectorAll('a'));
+      for (const a of anchors) {
+        try {
+          a.dispatchEvent(new window.Event('click', { bubbles: true, cancelable: true }));
+        } catch (e) { /* best effort */ }
+      }
+    })();
+  `,
+    ctx
+  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
   callHook(window, 'closeOverlay');
 });
 
