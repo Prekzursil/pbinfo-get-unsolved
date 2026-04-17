@@ -2,7 +2,7 @@
 
 // Cross-browser reference: Firefox still exposes `browser.*`, Chrome uses `chrome.*`.
 // Both conform to the MV3 events we need. We normalize once and proceed.
-const api = typeof browser !== 'undefined' ? browser : chrome;
+const api = typeof globalThis.browser === 'undefined' ? globalThis.chrome : globalThis.browser;
 
 api.runtime.onInstalled.addListener(({ reason }) => {
   console.info('[pbinfo-get-unsolved] installed/upgraded:', reason);
@@ -43,9 +43,9 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await api.scripting.executeScript({
           target: { tabId: tab.id },
           func: () => {
-            if (typeof window.pbinfoGetUnsolvedStart === 'function') {
-              window.PBINFO_GET_UNSOLVED_NO_AUTORUN = true;
-              window.pbinfoGetUnsolvedStart();
+            if (typeof globalThis.pbinfoGetUnsolvedStart === 'function') {
+              globalThis.PBINFO_GET_UNSOLVED_NO_AUTORUN = true;
+              globalThis.pbinfoGetUnsolvedStart();
             } else {
               console.error('[pbinfo-get-unsolved] content script not ready.');
             }

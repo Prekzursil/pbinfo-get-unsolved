@@ -44,7 +44,7 @@ test('classifyStorageError: maps quota-ish errors to "quota"', () => {
 });
 
 test('formatDateTime: returns "-" for non-finite, locale string for valid', () => {
-  assert.equal(formatDateTime(NaN), '-');
+  assert.equal(formatDateTime(Number.NaN), '-');
   assert.equal(formatDateTime('not a number'), '-');
   const now = Date.now();
   const s = formatDateTime(now);
@@ -101,9 +101,9 @@ test('normalizeSnapshotIndex: filters unnamed entries, sorts by savedAt desc', (
   assert.equal(out[0].storageLevel, 'minimal');
   assert.equal(out[0].storageVersion, 1);
   // 'c' has non-finite savedAt -> null -> sorts last
-  assert.equal(out[out.length - 1].id, 'c');
-  assert.equal(out[out.length - 1].savedAt, null);
-  assert.equal(out[out.length - 1].storageVersion, 2);
+  assert.equal(out.at(-1).id, 'c');
+  assert.equal(out.at(-1).savedAt, null);
+  assert.equal(out.at(-1).storageVersion, 2);
 });
 
 test('normalizeSnapshotIndex: non-array input returns []', () => {

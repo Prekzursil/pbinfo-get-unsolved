@@ -63,13 +63,16 @@ test('buildScoreCandidatesFromCard: anchor with score tooltip picks up isLink=tr
   assert.equal(info.userScore, 85);
 });
 
-test('buildScoreCandidatesFromCard: tooltip-less numeric span with \\bp\\b word passes looksLikeScoreText', () => {
-  const card = cardFrom(`<span class="badge">15 p</span>`);
-  const cands = buildScoreCandidatesFromCard(card);
-  // Not in footer, not in Rezolva — but \bp\b matches
-  assert.equal(cands.length, 1);
-  assert.equal(cands[0].value, 15);
-});
+test(
+  String.raw`buildScoreCandidatesFromCard: tooltip-less numeric span with \bp\b word passes looksLikeScoreText`,
+  () => {
+    const card = cardFrom(`<span class="badge">15 p</span>`);
+    const cands = buildScoreCandidatesFromCard(card);
+    // Not in footer, not in Rezolva — but \bp\b matches
+    assert.equal(cands.length, 1);
+    assert.equal(cands[0].value, 15);
+  }
+);
 
 test('extractProblemMetaFromProblemPage: difficulty keywords (med / dific / conc) each route', () => {
   const mk = (difficultyLabel) => {

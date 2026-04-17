@@ -35,7 +35,7 @@ test('zipBuffer: produces archive with valid local file + end-of-central-dir sig
   // Local file header signature at offset 0.
   assert.equal(archive.readUInt32LE(0), 0x04034b50);
   // End of central directory: last 22 bytes, signature 0x06054b50.
-  const eocd = archive.slice(archive.length - 22);
+  const eocd = archive.subarray(-22);
   assert.equal(eocd.readUInt32LE(0), 0x06054b50);
   assert.equal(eocd.readUInt16LE(10), 2); // total entries
 });

@@ -64,7 +64,7 @@ test('selectScoreFromCandidates: scor maxim keyword path', () => {
 
 test('selectScoreFromCandidates: non-finite best.value is rejected', () => {
   const res = selectScoreFromCandidates([
-    { tooltip: 'Punctaj', text: 'x', value: NaN, max: null, hasRatio: false, isLink: false },
+    { tooltip: 'Punctaj', text: 'x', value: Number.NaN, max: null, hasRatio: false, isLink: false },
   ]);
   assert.deepEqual(res, { userScore: null, maxScore: null });
 });

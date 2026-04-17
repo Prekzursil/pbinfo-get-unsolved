@@ -1,6 +1,6 @@
 'use strict';
 
-const api = typeof browser !== 'undefined' ? browser : chrome;
+const api = typeof globalThis.browser === 'undefined' ? globalThis.chrome : globalThis.browser;
 
 const startBtn = document.getElementById('start');
 const statusEl = document.getElementById('status');
@@ -14,7 +14,7 @@ function setStatus(msg, kind) {
 
 function setSubtitleNavigateHint() {
   // Build DOM explicitly — no innerHTML — to keep CSP strict and avoid XSS.
-  while (subtitleEl.firstChild) subtitleEl.removeChild(subtitleEl.firstChild);
+  while (subtitleEl.firstChild) subtitleEl.firstChild.remove();
   subtitleEl.appendChild(document.createTextNode('Navighează la '));
   const a = document.createElement('a');
   a.href = 'https://www.pbinfo.ro/';

@@ -6,10 +6,10 @@
 // element so that its IIFE defines window.pbinfoGetUnsolvedStart on the page.
 
 (function injectLibrary() {
-  if (window.__PBINFO_GET_UNSOLVED_EXT_READY__) return;
-  window.__PBINFO_GET_UNSOLVED_EXT_READY__ = true;
+  if (globalThis.__PBINFO_GET_UNSOLVED_EXT_READY__) return;
+  globalThis.__PBINFO_GET_UNSOLVED_EXT_READY__ = true;
 
-  const api = typeof browser !== 'undefined' ? browser : chrome;
+  const api = typeof globalThis.browser === 'undefined' ? globalThis.chrome : globalThis.browser;
   const libUrl = api.runtime.getURL('content/pbinfo-get-unsolved.lib.js');
 
   const s = document.createElement('script');
