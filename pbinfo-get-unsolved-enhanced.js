@@ -3820,14 +3820,11 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       const startOffset = scanMode === 'list' ? effectivePageSize * (pageIndex - 1) : null;
       let url;
       if (scanMode === 'id-range') {
-        // Guard against Sonar S5144: coerce pageIndex to a positive integer
-        // before it ever reaches URL construction — even though it flows from
-        // our own validated config.idRange, we want the assertion to be local.
+        // pageIndex flows from config.idRange (already validated at startup
+        // via parseIdRangeInput) and the queue, so it's always a positive
+        // integer. safePbinfoFetchUrl below is the defense-in-depth backstop
+        // for Sonar S5144, so we don't need a second guard here.
         const safeId = Math.trunc(Number(pageIndex));
-        if (!Number.isFinite(safeId) || safeId < 1) {
-          finalize();
-          return;
-        }
         url = new URL(
           `/probleme/${safeId}`,
           location?.origin || 'https://www.pbinfo.ro'
