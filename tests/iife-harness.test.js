@@ -92,6 +92,18 @@ function buildShortScanContext(extraOverrides = {}) {
   });
 }
 
+// Shorthand for tests that install their own fetch stub afterward — skip
+// the default fetchResponse and let the caller override window.fetch.
+function buildNoFetchContext(extraOverrides = {}) {
+  return buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      ...SHORT_SCAN_OVERRIDES,
+      ...extraOverrides,
+    },
+  });
+}
+
 // Boilerplate for restore-from-snapshot tests: seed keys.full with `snap`,
 // set window.confirm=true, and route the first prompt to listUrl so the
 // IIFE's pageLink matches the key hash. Returns the same { ctx, window }.
@@ -861,12 +873,7 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
 });
 
 test('iife-harness: stop scan during hanging fetch triggers AbortError path', async () => {
-  const { ctx, window } = buildContext({
-    fetchResponse: null,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window } = buildNoFetchContext();
   // Fetch that respects signal.abort — resolves with AbortError when controller
   // aborts, otherwise hangs forever.
   window.fetch = (_url, init) =>
@@ -1200,12 +1207,7 @@ test('iife-harness: loadStateBtn snapshot: branch via override + in-vm pause+loa
     ],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
-  const { ctx, window, document } = buildContext({
-    fetchResponse: null,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window, document } = buildNoFetchContext();
   // Hanging fetch so inFlight never drains but the scan is not finished
   // (guard in loadStateBtn requires paused || finished before inFlight check).
   // Actually both guards must pass: !paused && !finished skip AND inFlight==0.
@@ -1627,12 +1629,7 @@ test('iife-harness: virtualize rows + 200-problem snapshot displays the virtuali
 });
 
 test('iife-harness: pause then resume re-schedules kicks via togglePause !paused branch', async () => {
-  const { ctx, window } = buildContext({
-    fetchResponse: null,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window } = buildNoFetchContext();
   // Hanging fetch so scan stays running (not finished / not stopped) and
   // togglePause actually flips state.
   window.fetch = () => new Promise(() => {});
