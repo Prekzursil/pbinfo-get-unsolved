@@ -3199,3 +3199,23 @@ test('iife-harness: id-range start beyond endId hits the start>endId abort', () 
     /* best effort */
   }
 });
+
+// =========================================================================
+// The tests below run LAST because they mutate linkedom prototype / vm
+// state in a way that regresses coverage counters for earlier tests if
+// they run first. They must remain at the end of this file.
+// =========================================================================
+
+test('iife-harness: list past-end (startOffset >= total) -> finishScan complete', async () => {
+  const pastEndBody =
+    '<!doctype html><html><body>' + `<span class="numar_probleme">5</span>` + '</body></html>';
+  const { ctx, window } = buildContext({
+    fetchResponse: { ok: true, status: 200, text: async () => pastEndBody },
+    modeOverrides: {
+      ...SHORT_SCAN_OVERRIDES,
+      PBINFO_GET_UNSOLVED_PAGE_SIZE: 10,
+      PBINFO_GET_UNSOLVED_START_PAGE: 2,
+    },
+  });
+  await startAndDrain(ctx, window, 6);
+});
