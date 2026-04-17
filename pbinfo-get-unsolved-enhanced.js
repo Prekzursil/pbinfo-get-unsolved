@@ -3462,16 +3462,17 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       beforeRetryLog,
       retryFn,
       finishReason,
+      finalize: finalizeFn,
     }) {
       noteAdaptiveFailure('blocked');
       if (retryCount < maxRetries) {
         const delay = getRetryDelayMs(retryCount);
         if (typeof beforeRetryLog === 'function') beforeRetryLog(delay);
-        finalize();
+        finalizeFn();
         setTimeout(() => retryFn(retryCount + 1), delay);
         return 'retrying';
       }
-      finalize();
+      finalizeFn();
       finishScan({ complete: false, reason: finishReason });
       return 'finished';
     }
@@ -3554,6 +3555,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
               retryFn: (next) => fetchIdRangeScoreBatch(batchStart, next),
               finishReason:
                 'Blocare detectată la fetch-ul de scoruri (batch). Încearcă delay mai mare și/sau concurență mai mică.',
+              finalize,
             });
             return;
           }
@@ -3882,6 +3884,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
               },
               retryFn: (next) => fetchPage(pageIndex, next),
               finishReason: `Blocare detectată la ${unitLabel} (posibil Cloudflare). Încearcă delay mai mare și/sau concurență mai mică.`,
+              finalize,
             });
             return;
           }
