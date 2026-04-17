@@ -770,15 +770,11 @@ function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
 }
 
 function parseHtmlDocument(responseText, { ParserClass } = {}) {
-  const ctor =
-    ParserClass ||
-    (typeof DOMParser === 'undefined'
-      ? typeof globalThis.DOMParser === 'undefined'
-        ? null
-        : globalThis.DOMParser
-      : DOMParser);
+  let ctor = ParserClass;
+  if (!ctor && globalThis.DOMParser !== undefined) ctor = globalThis.DOMParser;
   if (!ctor) return null;
-  const parser = new ctor();
+  const Parser = ctor;
+  const parser = new Parser();
   return parser.parseFromString(String(responseText || ''), 'text/html');
 }
 
@@ -1653,8 +1649,8 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
 
     function describeClipboardErrorLocal(err) {
       return describeClipboardError(err, {
-        navigator: typeof navigator === 'undefined' ? null : navigator,
-        isSecureContext: typeof window !== 'undefined' && Boolean(window.isSecureContext),
+        navigator: globalThis.navigator || null,
+        isSecureContext: Boolean(globalThis.isSecureContext),
       });
     }
 
@@ -3611,7 +3607,22 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           return;
         }
       }
-      fetch(url, {
+      // Final allow-list check right at the fetch call site so Sonar's
+      // taint tracker (S5144) terminates on a proven-safe url value
+      // regardless of which branch above built it.
+      let safeFetchUrl;
+      try {
+        const parsed = new URL(String(url), 'https://www.pbinfo.ro/');
+        if (parsed.protocol !== 'https:' || !['www.pbinfo.ro', 'pbinfo.ro'].includes(parsed.host)) {
+          finalize();
+          return;
+        }
+        safeFetchUrl = parsed.toString();
+      } catch {
+        finalize();
+        return;
+      }
+      fetch(safeFetchUrl, {
         method: 'GET',
         signal: controller.signal,
         credentials: 'include',
