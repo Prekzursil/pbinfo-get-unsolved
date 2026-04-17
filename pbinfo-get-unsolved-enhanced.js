@@ -769,6 +769,29 @@ function idRangeBatchStartForId(id, { startId = 1, batchSize = 200 } = {}) {
   return base + Math.floor((id - base) / size) * size;
 }
 
+function resolveThemeValue(raw) {
+  if (raw === 'light' || raw === 'dark' || raw === 'system') return raw;
+  return 'system';
+}
+
+function loadStoredTheme(storage = globalThis.localStorage, key = 'pbinfo-get-unsolved:theme') {
+  if (!storage) return 'system';
+  try {
+    const v = normalizeSpace(storage.getItem(key));
+    return resolveThemeValue(v);
+  } catch {
+    return 'system';
+  }
+}
+
+function applyThemeAttribute(targetEl, value) {
+  const v = resolveThemeValue(value);
+  if (!targetEl || typeof targetEl.setAttribute !== 'function') return v;
+  if (v === 'system') targetEl.removeAttribute('data-theme');
+  else targetEl.setAttribute('data-theme', v);
+  return v;
+}
+
 function effectiveDelayMs({ enabled, baseDelayMs, adaptiveDelayMs } = {}) {
   const base = Number.isFinite(baseDelayMs) ? baseDelayMs : 0;
   const adaptive = Number.isFinite(adaptiveDelayMs) ? adaptiveDelayMs : 0;
@@ -1012,6 +1035,9 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       parseHtmlDocument,
       effectiveDelayMs,
       effectiveConcurrency,
+      resolveThemeValue,
+      loadStoredTheme,
+      applyThemeAttribute,
     };
   }
 } else {
@@ -1044,24 +1070,20 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
     }
 
     function loadThemePreference() {
-      try {
-        const v = normalizeSpace(localStorage.getItem(THEME_STORAGE_KEY));
-        if (v === 'light' || v === 'dark' || v === 'system') return v;
-      } catch {}
-      return 'system';
+      return loadStoredTheme(globalThis.localStorage, THEME_STORAGE_KEY);
     }
 
     function persistThemePreference(value) {
       try {
         localStorage.setItem(THEME_STORAGE_KEY, value);
-      } catch {}
+      } catch {
+        /* best effort */
+      }
     }
 
     function applyThemePreference(value, targetEl) {
       const el = targetEl && targetEl.setAttribute ? targetEl : document.documentElement;
-      const v = value === 'light' || value === 'dark' || value === 'system' ? value : 'system';
-      if (v === 'system') el.removeAttribute('data-theme');
-      else el.setAttribute('data-theme', v);
+      const v = applyThemeAttribute(el, value);
       persistThemePreference(v);
       return v;
     }
