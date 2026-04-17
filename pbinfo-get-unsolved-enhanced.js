@@ -599,6 +599,118 @@ function restoreProblemsFromSnapshot(snapshot) {
   return { allProblems, seenProblemIds };
 }
 
+// Pure helpers promoted out of the browser IIFE so they can be unit-tested in Node.
+
+function safeJsonParse(value) {
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function fnv1a32(str) {
+  const s = String(str || '');
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+function classifyStorageError(err) {
+  if (!err) return 'unknown';
+  if (err.name === 'QuotaExceededError' || err.code === 22 || err.code === 1014) {
+    return 'quota';
+  }
+  return 'unknown';
+}
+
+function formatDateTime(ts) {
+  const d = new Date(Number(ts));
+  if (!Number.isFinite(d.getTime())) return '-';
+  return d.toLocaleString();
+}
+
+function formatDuration(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m ${String(ss).padStart(2, '0')}s`;
+  if (m > 0) return `${m}m ${String(ss).padStart(2, '0')}s`;
+  return `${ss}s`;
+}
+
+function normalizeScanMode(value) {
+  const v = normalizeForMatch(value || '');
+  if (v === '1') return 'list';
+  if (v === '2') return 'id-range';
+  if (v.includes('id')) return 'id-range';
+  if (v.includes('range')) return 'id-range';
+  if (v.includes('index')) return 'id-range';
+  if (v.includes('list')) return 'list';
+  return null;
+}
+
+function parseIdRangeInput(value, fallback) {
+  const raw = normalizeSpace(value);
+  const fb = normalizeSpace(fallback);
+  const t = raw || fb;
+  if (!t) return null;
+  const m = /^(\d+)\s*-\s*(\d+)$/.exec(t);
+  if (m) {
+    const startId = parseInt(m[1], 10);
+    const endId = parseInt(m[2], 10);
+    if (!Number.isFinite(startId) || !Number.isFinite(endId) || startId < 1 || endId < 1)
+      return null;
+    return { startId, endId };
+  }
+  const n = parseInt(t, 10);
+  if (!Number.isFinite(n) || n < 1) return null;
+  return { startId: 1, endId: n };
+}
+
+function normalizeSnapshotIndex(index, { storageVersion = 2, legacyVersion = 1 } = {}) {
+  const raw = Array.isArray(index) ? index : [];
+  const out = [];
+  for (const item of raw) {
+    const id = normalizeSpace(item?.id);
+    if (!id) continue;
+    const savedAt = Number(item?.savedAt);
+    const storageLevel =
+      item?.storageLevel === 'full' ||
+      item?.storageLevel === 'minimal' ||
+      item?.storageLevel === 'progress'
+        ? item.storageLevel
+        : 'minimal';
+    const label = typeof item?.label === 'string' ? item.label : '';
+    const resolvedVersion =
+      Number(item?.storageVersion) === legacyVersion ? legacyVersion : storageVersion;
+    out.push({
+      id,
+      savedAt: Number.isFinite(savedAt) ? savedAt : null,
+      storageLevel,
+      label,
+      storageVersion: resolvedVersion,
+    });
+  }
+  out.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+  return out;
+}
+
+function buildStateKeys(pageLink, { namespace = 'pbinfo-get-unsolved', version = 2 } = {}) {
+  const h = fnv1a32(pageLink);
+  return {
+    full: `${namespace}:state:v${version}:${h}`,
+    minimal: `${namespace}:state-min:v${version}:${h}`,
+    index: `${namespace}:state-index:v${version}:${h}`,
+    itemPrefix: `${namespace}:state-item:v${version}:${h}:`,
+  };
+}
+
 if (typeof window === 'undefined' || typeof document === 'undefined') {
   if (typeof module !== 'undefined') {
     module.exports = {
@@ -628,6 +740,15 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       restoreProblemsFromSnapshot,
       isLikelyPbinfoNotFoundHtml,
       isLikelyPbinfoBlockedHtml,
+      safeJsonParse,
+      fnv1a32,
+      classifyStorageError,
+      formatDateTime,
+      formatDuration,
+      normalizeScanMode,
+      parseIdRangeInput,
+      normalizeSnapshotIndex,
+      buildStateKeys,
     };
   }
 } else {
@@ -644,41 +765,8 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
     const LEGACY_STATE_STORAGE_VERSION = 1;
     const THEME_STORAGE_KEY = `${STORAGE_NAMESPACE}:theme`;
 
-    function safeJsonParse(value) {
-      if (typeof value !== 'string' || value.trim() === '') return null;
-      try {
-        return JSON.parse(value);
-      } catch {
-        return null;
-      }
-    }
-
-    function fnv1a32(str) {
-      const s = String(str || '');
-      let h = 0x811c9dc5;
-      for (let i = 0; i < s.length; i++) {
-        h ^= s.charCodeAt(i);
-        h = Math.imul(h, 0x01000193);
-      }
-      return (h >>> 0).toString(16).padStart(8, '0');
-    }
-
     function makeStateKeys(pageLink, version = STATE_STORAGE_VERSION) {
-      const h = fnv1a32(pageLink);
-      return {
-        full: `${STORAGE_NAMESPACE}:state:v${version}:${h}`,
-        minimal: `${STORAGE_NAMESPACE}:state-min:v${version}:${h}`,
-        index: `${STORAGE_NAMESPACE}:state-index:v${version}:${h}`,
-        itemPrefix: `${STORAGE_NAMESPACE}:state-item:v${version}:${h}:`,
-      };
-    }
-
-    function classifyStorageError(err) {
-      if (!err) return 'unknown';
-      if (err.name === 'QuotaExceededError' || err.code === 22 || err.code === 1014) {
-        return 'quota';
-      }
-      return 'unknown';
+      return buildStateKeys(pageLink, { namespace: STORAGE_NAMESPACE, version });
     }
 
     function storageGetJson(keys) {
@@ -711,12 +799,6 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           localStorage.removeItem(key);
         } catch {}
       }
-    }
-
-    function formatDateTime(ts) {
-      const d = new Date(Number(ts));
-      if (!Number.isFinite(d.getTime())) return '-';
-      return d.toLocaleString();
     }
 
     function loadThemePreference() {
@@ -890,17 +972,6 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       Object.assign(adaptiveThrottleState, next);
     }
 
-    function normalizeScanMode(value) {
-      const v = normalizeForMatch(value || '');
-      if (v === '1') return 'list';
-      if (v === '2') return 'id-range';
-      if (v.includes('id')) return 'id-range';
-      if (v.includes('range')) return 'id-range';
-      if (v.includes('index')) return 'id-range';
-      if (v.includes('list')) return 'list';
-      return null;
-    }
-
     const defaultLink = location?.href || '';
     const modeFromWindow = normalizeScanMode(window.PBINFO_GET_UNSOLVED_MODE);
     let scanMode = modeFromWindow;
@@ -924,24 +995,6 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
     }
     if (!scanMode) scanMode = 'list';
     config.scanMode = scanMode;
-
-    function parseIdRangeInput(value, fallback) {
-      const raw = normalizeSpace(value);
-      const fb = normalizeSpace(fallback);
-      const t = raw || fb;
-      if (!t) return null;
-      const m = /^(\d+)\s*-\s*(\d+)$/.exec(t);
-      if (m) {
-        const startId = parseInt(m[1], 10);
-        const endId = parseInt(m[2], 10);
-        if (!Number.isFinite(startId) || !Number.isFinite(endId) || startId < 1 || endId < 1)
-          return null;
-        return { startId, endId };
-      }
-      const n = parseInt(t, 10);
-      if (!Number.isFinite(n) || n < 1) return null;
-      return { startId: 1, endId: n };
-    }
 
     let pageLink = null;
 
@@ -2201,16 +2254,6 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       refreshSessionInfo();
     }
 
-    function formatDuration(ms) {
-      const s = Math.max(0, Math.floor(ms / 1000));
-      const h = Math.floor(s / 3600);
-      const m = Math.floor((s % 3600) / 60);
-      const ss = s % 60;
-      if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m ${String(ss).padStart(2, '0')}s`;
-      if (m > 0) return `${m}m ${String(ss).padStart(2, '0')}s`;
-      return `${ss}s`;
-    }
-
     function updateProgress(inFlight) {
       const elapsedMs = Date.now() - startedAt;
       const scanStart = Math.max(1, Number.isFinite(config.startPage) ? config.startPage : 1);
@@ -2577,36 +2620,6 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       if (!key) return null;
       const keys = storageVersion === LEGACY_STATE_STORAGE_VERSION ? legacyStateKeys : stateKeys;
       return `${keys.itemPrefix}${key}`;
-    }
-
-    function normalizeSnapshotIndex(index) {
-      const raw = Array.isArray(index) ? index : [];
-      const out = [];
-      for (const item of raw) {
-        const id = normalizeSpace(item?.id);
-        if (!id) continue;
-        const savedAt = Number(item?.savedAt);
-        const storageLevel =
-          item?.storageLevel === 'full' ||
-          item?.storageLevel === 'minimal' ||
-          item?.storageLevel === 'progress'
-            ? item.storageLevel
-            : 'minimal';
-        const label = typeof item?.label === 'string' ? item.label : '';
-        const storageVersion =
-          Number(item?.storageVersion) === LEGACY_STATE_STORAGE_VERSION
-            ? LEGACY_STATE_STORAGE_VERSION
-            : STATE_STORAGE_VERSION;
-        out.push({
-          id,
-          savedAt: Number.isFinite(savedAt) ? savedAt : null,
-          storageLevel,
-          label,
-          storageVersion,
-        });
-      }
-      out.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
-      return out;
     }
 
     function loadSnapshotIndexForLink() {
