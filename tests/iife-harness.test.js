@@ -18,6 +18,18 @@ const { parseHTML } = require('linkedom');
 
 const LIBRARY_PATH = path.resolve(__dirname, '..', 'pbinfo-get-unsolved-enhanced.js');
 
+// Cache the source text once; each test loads it into a fresh vm context.
+// The dynamic-injection Sonar hotspot (S1523) is reviewed & accepted here:
+// the source is our own file, not attacker-controlled, and this is a
+// test-only harness that never runs in production.
+const LIBRARY_SOURCE = fs.readFileSync(LIBRARY_PATH, 'utf8');
+
+function loadLibraryInto(ctx) {
+  // NOSONAR: S1523 — intentional load of our own source into a vm context
+  // for branch-coverage purposes; no user input is ever evaluated.
+  vm.runInContext(LIBRARY_SOURCE, ctx, { filename: LIBRARY_PATH });
+}
+
 function buildContext({ modeOverrides = {}, fetchResponse } = {}) {
   const { window, document } = parseHTML(
     '<!doctype html><html><head><title>t</title></head><body></body></html>'
@@ -170,8 +182,7 @@ function buildContext({ modeOverrides = {}, fetchResponse } = {}) {
 
 test('iife-harness: can load the script under a linkedom window + stubs without throwing', () => {
   const { ctx, window } = buildContext();
-  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
-  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  loadLibraryInto(ctx);
   if (typeof window.pbinfoGetUnsolvedStart !== 'function') {
     throw new TypeError('pbinfoGetUnsolvedStart was not defined on window');
   }
@@ -179,8 +190,7 @@ test('iife-harness: can load the script under a linkedom window + stubs without 
 
 test('iife-harness: starts a list scan against a not-found page without throwing', () => {
   const { ctx, window } = buildContext();
-  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
-  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  loadLibraryInto(ctx);
   // Calling start kicks the scan; our setTimeout runs synchronously so the
   // fetch stub returns a "Pagina nu exista" body and the scan terminates
   // quickly.
@@ -202,8 +212,7 @@ test('iife-harness: id-range mode initializes without throwing', () => {
       PBINFO_GET_UNSOLVED_DELAY_MS: 0,
     },
   });
-  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
-  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  loadLibraryInto(ctx);
   try {
     window.pbinfoGetUnsolvedStart();
   } catch {
@@ -225,8 +234,7 @@ test('iife-harness: list scan against a "not found" body runs the response pipel
       PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
     },
   });
-  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
-  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  loadLibraryInto(ctx);
   try {
     window.pbinfoGetUnsolvedStart();
   } catch {
@@ -272,8 +280,7 @@ test('iife-harness: list scan with debug enabled exercises debugDumpCard on pars
     });
   };
   ctx.fetch = window.fetch;
-  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
-  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  loadLibraryInto(ctx);
   try {
     window.pbinfoGetUnsolvedStart();
   } catch {
@@ -321,8 +328,7 @@ test('iife-harness: list scan parses a real pbinfo card and drains without hangi
     });
   };
   ctx.fetch = window.fetch;
-  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
-  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  loadLibraryInto(ctx);
   try {
     window.pbinfoGetUnsolvedStart();
   } catch {
@@ -362,8 +368,7 @@ test('iife-harness: id-range scan against a /probleme/N problem page drains', as
       PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: false,
     },
   });
-  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
-  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  loadLibraryInto(ctx);
   try {
     window.pbinfoGetUnsolvedStart();
   } catch {
@@ -439,8 +444,7 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
   const promptReplies = [listUrl, 'seed'];
   window.prompt = () => promptReplies[promptCalls++] ?? null;
   ctx.prompt = window.prompt;
-  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
-  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  loadLibraryInto(ctx);
   try {
     window.pbinfoGetUnsolvedStart();
   } catch {
@@ -485,8 +489,7 @@ test('iife-harness: overlay=true + closeOverlay exercise the overlay teardown br
   });
   window.confirm = () => true;
   ctx.confirm = window.confirm;
-  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
-  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  loadLibraryInto(ctx);
   try {
     window.pbinfoGetUnsolvedStart();
   } catch {
@@ -541,8 +544,7 @@ test('iife-harness: original pre-seeded snapshot triggers restoreFromSavedState'
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
   window.confirm = () => true;
   ctx.confirm = window.confirm;
-  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
-  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  loadLibraryInto(ctx);
   try {
     window.pbinfoGetUnsolvedStart();
   } catch {
@@ -568,8 +570,7 @@ test('iife-harness: list scan against a blocked cloudflare-ish body exercises th
       PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
     },
   });
-  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
-  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  loadLibraryInto(ctx);
   try {
     window.pbinfoGetUnsolvedStart();
   } catch {
@@ -606,8 +607,7 @@ function dispatchControlEvent(btn, window) {
 
 test('iife-harness: exercising exported UI hooks (sortTable, stopScan, togglePause) after start', () => {
   const { ctx, window, document } = buildContext();
-  const source = fs.readFileSync(LIBRARY_PATH, 'utf8');
-  vm.runInContext(source, ctx, { filename: LIBRARY_PATH });
+  loadLibraryInto(ctx);
   try {
     window.pbinfoGetUnsolvedStart();
   } catch {
