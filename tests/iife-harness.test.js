@@ -2624,6 +2624,43 @@ test('iife-harness: restore progress-level saved state hits kind=minimal+progres
   await startAndDrain(ctx, window, 8);
 });
 
+test('iife-harness: import with storage.setItem throwing on index writes logs save-failure', async () => {
+  const importable = makeEmptySnapshot(undefined, {
+    problems: [
+      { id: 77, name: 'test', link: '/77', status: 'tried', userScore: 0, maxScore: 100 },
+    ],
+    stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
+  });
+  const { ctx, window, document } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  // Wrap setItem so writes to state-index:* keys throw QuotaExceededError.
+  // The snapshot-item write succeeds; the index write fails -> L3172-3176
+  // noteStorageFailure + return { ok: false }.
+  const realSet = window.localStorage.setItem.bind(window.localStorage);
+  window.localStorage.setItem = (k, v) => {
+    if (typeof k === 'string' && k.includes('state-index')) {
+      const err = new Error('QuotaExceededError');
+      err.name = 'QuotaExceededError';
+      throw err;
+    }
+    return realSet(k, v);
+  };
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  await startAndDrain(ctx, window, 4);
+  await dispatchImport(window, document, JSON.stringify(importable), 'quota.json');
+});
+
 test('iife-harness: import minimal-level snapshot hits the minimal fallback chain', async () => {
   const importable = makeEmptySnapshot(undefined, {
     storageLevel: 'minimal',
