@@ -308,6 +308,21 @@ function normalizeListUrl(inputUrl, baseUrl, paginationParam = 'start') {
 // terminates its taint walk here because the function only returns a
 // string when the origin matches the pbinfo allow-list. Returns null
 // on malformed input or off-origin host — callers `finalize()` + return.
+// Compute the ordered list of storage levels to try when persisting a scan
+// snapshot. `mode` is the caller's desired level ('full' / 'minimal' /
+// 'progress'); unknown modes coerce to 'full'. Options:
+//   - progressOnly: if true, skips 'full' from the fallback chain so
+//     low-space environments never attempt to serialize the rich blob.
+function resolveSnapshotLevels(mode, { progressOnly = false } = {}) {
+  const desired = mode === 'minimal' || mode === 'progress' ? mode : 'full';
+  let order;
+  if (desired === 'full') order = ['full', 'minimal', 'progress'];
+  else if (desired === 'minimal') order = ['minimal', 'progress'];
+  else order = ['progress'];
+  if (progressOnly && order[0] === 'full') return order.slice(1);
+  return order;
+}
+
 function safePbinfoFetchUrl(candidateUrl, { base = 'https://www.pbinfo.ro/' } = {}) {
   const raw = candidateUrl == null ? '' : String(candidateUrl);
   if (!raw) return null;
@@ -1270,6 +1285,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       formatFetchRetryLog,
       redactScoreCandidates,
       safePbinfoFetchUrl,
+      resolveSnapshotLevels,
     };
   }
 } else {
@@ -3215,17 +3231,9 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
     }
 
     function saveScanState({ mode, reason, silent } = {}) {
-      const desired = mode === 'minimal' || mode === 'progress' ? mode : 'full';
-      const fallbackOrder =
-        desired === 'full'
-          ? ['full', 'minimal', 'progress']
-          : desired === 'minimal'
-            ? ['minimal', 'progress']
-            : ['progress'];
-      const levels =
-        storagePolicy.progressOnly && fallbackOrder[0] === 'full'
-          ? fallbackOrder.slice(1)
-          : fallbackOrder;
+      const levels = resolveSnapshotLevels(mode, {
+        progressOnly: storagePolicy.progressOnly,
+      });
 
       for (const level of levels) {
         const snap = buildStateSnapshot(level, reason);
