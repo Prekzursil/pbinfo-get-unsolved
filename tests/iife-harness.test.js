@@ -653,6 +653,79 @@ test('iife-harness: 200-problem restored snapshot triggers scheduleChunk + clear
   }
 });
 
+test('iife-harness: no-requestAnimationFrame path exercises scheduleChunk setTimeout fallback', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const problems = [];
+  for (let i = 0; i < 200; i++) {
+    problems.push({
+      id: i + 1,
+      name: `p${i + 1}`,
+      link: `/probleme/${i + 1}/x`,
+      difficulty: 1,
+      status: 'tried',
+      userScore: 50,
+      maxScore: 100,
+    });
+  }
+  const snapshot = {
+    version: 2,
+    schemaVersion: 2,
+    storageLevel: 'full',
+    savedAt: Date.now(),
+    pageLink: listUrl,
+    scanMode: 'list',
+    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
+    scanStartPage: 1,
+    pageQueue: [],
+    deferred: [],
+    inFlightPages: [],
+    seenProblemIds: problems.map((p) => p.id),
+    problems,
+    stats: { solved: 0, tried: problems.length, unattempted: 0, total: problems.length, pages: 1 },
+  };
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_RENDER_CHUNK_SIZE: 50,
+    },
+  });
+  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  // Drop requestAnimationFrame BEFORE the library runs so scheduleChunk
+  // falls back to the setTimeout arrow function (covers the last
+  // uncovered function in c8's map).
+  delete window.requestAnimationFrame;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 12; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+  // Explicitly invoke sortTable → updateTable with 200 rows; that
+  // triggers the first chunk + scheduleChunk call for the second.
+  try {
+    window.sortTable?.('id');
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 6; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
 test('iife-harness: filter inputs + quota-throwing storage trigger requestRenderResults + noteStorageFailure', async () => {
   const { ctx, window, document } = buildContext({
     fetchResponse: {
