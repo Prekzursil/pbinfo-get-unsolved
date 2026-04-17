@@ -1187,6 +1187,22 @@ function serializeFilterState(filterState) {
   };
 }
 
+function problemMatchesSearch(problem, query) {
+  if (!query) return true;
+  const idText = Number.isFinite(problem?.id) ? String(problem.id) : '';
+  const nameText = normalizeForMatch(problem?.name || '');
+  return idText.includes(query) || nameText.includes(query);
+}
+
+function problemMatchesScore(problem, { min, max, includeUnknown }) {
+  const score = problem?.userScore;
+  const scoreKnown = score != null && Number.isFinite(score);
+  if (!scoreKnown) return includeUnknown;
+  if (min != null && score < min) return false;
+  if (max != null && score > max) return false;
+  return true;
+}
+
 function filterProblems(problems, filterState) {
   const list = Array.isArray(problems) ? problems : [];
   const state = filterState && typeof filterState === 'object' ? filterState : {};
@@ -1198,16 +1214,8 @@ function filterProblems(problems, filterState) {
 
   return list.filter((p) => {
     if (statuses.size > 0 && !statuses.has(p?.status)) return false;
-    if (query) {
-      const idText = Number.isFinite(p?.id) ? String(p.id) : '';
-      const nameText = normalizeForMatch(p?.name || '');
-      if (!idText.includes(query) && !nameText.includes(query)) return false;
-    }
-    const scoreKnown = p?.userScore != null && Number.isFinite(p?.userScore);
-    if (!scoreKnown) return includeUnknown;
-    if (min != null && p.userScore < min) return false;
-    if (max != null && p.userScore > max) return false;
-    return true;
+    if (!problemMatchesSearch(p, query)) return false;
+    return problemMatchesScore(p, { min, max, includeUnknown });
   });
 }
 
