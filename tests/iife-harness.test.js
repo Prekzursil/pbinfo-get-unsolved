@@ -694,6 +694,76 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
   }
 });
 
+test('iife-harness: pruneSnapshotIndex evicts past max=8 snapshots on save', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  // Seed 12 snapshots in the index + 12 snapshot item entries in storage.
+  // max=8 (default), so when saveSnapshotItem pushes a 13th and calls
+  // pruneSnapshotIndex, the oldest 5 should be evicted via storageRemove.
+  const now = Date.now();
+  const indexItems = [];
+  for (let i = 0; i < 12; i++) {
+    const id = `seed-${i}`;
+    const item = {
+      id,
+      savedAt: now - i * 1000,
+      storageLevel: 'full',
+      label: `s${i}`,
+      storageVersion: 2,
+    };
+    indexItems.push(item);
+  }
+  const { ctx, window, document } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.localStorage.setItem(keys.index, JSON.stringify(indexItems));
+  // Seed storage keys for each item so pruneSnapshotIndex sees them as
+  // 'present' during its first filtering pass.
+  const snapshotBody = makeEmptySnapshot(listUrl, {
+    savedAt: now,
+    seenProblemIds: [],
+    problems: [],
+    stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
+  });
+  for (const item of indexItems) {
+    window.localStorage.setItem(`${keys.itemPrefix}${item.id}`, JSON.stringify(snapshotBody));
+  }
+  window.confirm = () => false; // decline restore so scan runs normally
+  ctx.confirm = window.confirm;
+  // Return listUrl on the link prompt so pageLink matches the seeded keys.
+  let promptCall = 0;
+  window.prompt = (_m, fallback) => {
+    promptCall += 1;
+    if (promptCall === 1) return listUrl; // link prompt
+    return fallback ?? '';
+  };
+  ctx.prompt = window.prompt;
+  await startAndDrain(ctx, window, 8);
+  // Click the Snapshot button to trigger saveSnapshotItem (which invokes
+  // pruneSnapshotIndex with a 13-item list -> eviction loop fires).
+  vm.runInContext(
+    `
+    (() => {
+      const btn = Array.from(document.querySelectorAll('button'))
+        .find((b) => (b.textContent || '').trim() === 'Snapshot');
+      if (btn) btn.dispatchEvent(new window.Event('click', { bubbles: true }));
+    })();
+  `,
+    ctx
+  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  await drainMicrotasks(4);
+});
+
 test('iife-harness: loadStateBtn autosave path via in-vm pause+load click', async () => {
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
