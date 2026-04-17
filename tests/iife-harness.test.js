@@ -78,6 +78,20 @@ const TERMINATOR_FETCH_RESPONSE = {
   text: async () => PBINFO_TERMINATOR_BODY,
 };
 
+// Shorthand for "scan one page with a terminator body and stop" — bundles
+// fetchResponse: TERMINATOR + SHORT_SCAN_OVERRIDES modeOverrides into a
+// single buildContext call. Used by tests that don't care about specific
+// fetch responses.
+function buildShortScanContext(extraOverrides = {}) {
+  return buildContext({
+    fetchResponse: TERMINATOR_FETCH_RESPONSE,
+    modeOverrides: {
+      ...SHORT_SCAN_OVERRIDES,
+      ...extraOverrides,
+    },
+  });
+}
+
 // Boilerplate for restore-from-snapshot tests: seed keys.full with `snap`,
 // set window.confirm=true, and route the first prompt to listUrl so the
 // IIFE's pageLink matches the key hash. Returns the same { ctx, window }.
@@ -462,23 +476,13 @@ test('iife-harness: restore prompt uses problems.length when stats.total missing
     ],
     stats: { solved: 0, tried: 2, unattempted: 0, total: 'not-a-number', pages: 1 },
   });
-  const { ctx, window } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window } = buildShortScanContext();
   seedSnapshotRestore({ ctx, window, listUrl, snap: snap });
   await startAndDrain(ctx, window, 8);
 });
 
 test('iife-harness: iframe setup throws → default-console fallback catch fires', async () => {
-  const { ctx, window } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window } = buildShortScanContext();
   // Override createElement to throw for iframe tag → L1303-1304 catch fires.
   const realCreate = ctx.document.createElement.bind(ctx.document);
   ctx.document = {
@@ -498,12 +502,7 @@ test('iife-harness: iframe setup throws → default-console fallback catch fires
 });
 
 test('iife-harness: console.clear throwing hits the outer iframe-console catch', async () => {
-  const { ctx, window } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window } = buildShortScanContext();
   // Throwing console.clear hits the second try/catch at L1306-1309.
   ctx.console = {
     log() {},
@@ -810,12 +809,7 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
     ],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
-  const { ctx, window, document } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window, document } = buildShortScanContext();
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
   window.localStorage.setItem(keys.index, JSON.stringify([indexItem]));
   window.localStorage.setItem(`${keys.itemPrefix}seed`, JSON.stringify(snapshot));
@@ -921,12 +915,7 @@ test('iife-harness: copy handlers with clipboard-api success hit the method=clip
     ],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
-  const { ctx, window } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window } = buildShortScanContext();
   seedSnapshotRestore({ ctx, window, listUrl, snap: snapshot });
   // Install a working clipboard.writeText stub inside the vm so the
   // clipboard-api branch of copyTextViaClipboardApi resolves and L1910
@@ -970,12 +959,7 @@ test('iife-harness: copy handlers with execCommand-success fallback hit the meth
     ],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
-  const { ctx, window, document } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window, document } = buildShortScanContext();
   seedSnapshotRestore({ ctx, window, listUrl, snap: snapshot });
   // Stub document.execCommand('copy') to return true so the fallback path
   // in copyTextToClipboard resolves { method: 'execCommand' } and the
@@ -1017,12 +1001,7 @@ test('iife-harness: deleteSnapshotItem with throwing index write hits failure lo
     problems: [],
     stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
   });
-  const { ctx, window: win } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window: win } = buildShortScanContext();
   win.localStorage.setItem(keys.index, JSON.stringify([indexItem]));
   win.localStorage.setItem(`${keys.itemPrefix}doomed`, JSON.stringify(snapshot));
   seedSnapshotRestore({ ctx, window: win, listUrl, snap: snapshot });
@@ -1074,12 +1053,7 @@ test('iife-harness: pruneSnapshotIndex evicts past max=8 snapshots on save', asy
     };
     indexItems.push(item);
   }
-  const { ctx, window } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window } = buildShortScanContext();
   window.localStorage.setItem(keys.index, JSON.stringify(indexItems));
   // Seed storage keys for each item so pruneSnapshotIndex sees them as
   // 'present' during its first filtering pass.
@@ -1280,12 +1254,7 @@ test('iife-harness: loadStateBtn snapshot: branch with missing item returns "ine
     label: 'gone',
     storageVersion: 2,
   };
-  const { ctx, window, document } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window, document } = buildShortScanContext();
   // Seed only the index, NOT the snapshot-item blob -> loadSnapshotItem
   // returns null -> handler takes the "inexistent" log branch (L2441-2445).
   window.localStorage.setItem(keys.index, JSON.stringify([indexItem]));
@@ -1319,12 +1288,7 @@ test('iife-harness: loadStateBtn with no saved state hits the no-snapshot log', 
   // (finished=true, inFlight=0). Both guards in loadStateBtn pass. Clear
   // localStorage just before the click so loadSavedStateForLink returns
   // null -> L2465-2469 "Nu există stare salvată" log fires.
-  const { ctx, window } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window } = buildShortScanContext();
   window.confirm = () => true;
   ctx.confirm = window.confirm;
   await startAndDrain(ctx, window, 8);
@@ -1704,12 +1668,7 @@ test('iife-harness: restore with filter.scoreMin/Max seeds input.value at setupC
     scoreMax: 90,
     searchQuery: 'demo',
   };
-  const { ctx, window } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window } = buildShortScanContext();
   seedSnapshotRestore({ ctx, window, listUrl, snap: snap });
   await startAndDrain(ctx, window, 8);
 });
@@ -1731,12 +1690,7 @@ test('iife-harness: restore snapshot with resumeFromPage fallback + empty filter
     scoreMax: null,
     searchQuery: '',
   };
-  const { ctx, window } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window } = buildShortScanContext();
   seedSnapshotRestore({ ctx, window, listUrl, snap: snap });
   await startAndDrain(ctx, window, 8);
 });
@@ -1782,12 +1736,7 @@ test('iife-harness: legacy v1 snapshot index merges with v2 via loadSnapshotInde
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
   const keysV2 = buildStateKeys(listUrl, { version: 2 });
   const keysV1 = buildStateKeys(listUrl, { version: 1 });
-  const { ctx, window } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window } = buildShortScanContext();
   // Seed a legacy-v1 index item so loadSnapshotIndexForLink reads
   // legacyStateKeys.index (L3020-3022) and merges it with current.
   const now = Date.now();
@@ -1827,12 +1776,7 @@ test('iife-harness: restore from snapshot with only config.startPage hits the el
   // Delete scanStartPage but seed config.startPage so L1606-1607 else-if runs.
   delete snap.scanStartPage;
   snap.config = { startPage: 5 };
-  const { ctx, window } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window } = buildShortScanContext();
   seedSnapshotRestore({ ctx, window, listUrl, snap: snap });
   await startAndDrain(ctx, window, 8);
 });
@@ -1843,12 +1787,7 @@ test('iife-harness: clicking a table-header anchor calls sortTable via preventDe
     problems: [{ id: 1, name: 'a', link: '/1', status: 'tried', userScore: 10, maxScore: 100 }],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
-  const { ctx, window } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window } = buildShortScanContext();
   seedSnapshotRestore({ ctx, window, listUrl, snap: snap });
   await startAndDrain(ctx, window, 8);
   // Click every header anchor inside the vm so the in-IIFE click handler
@@ -1923,12 +1862,7 @@ test('iife-harness: copyTextToClipboard fallback branches via clipboard-throws +
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
   const keys = buildStateKeys(listUrl);
   const snapshot = makeLargeListSnapshot(listUrl);
-  const { ctx, window, document } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window, document } = buildShortScanContext();
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
   window.confirm = () => true;
   ctx.confirm = window.confirm;
@@ -1959,12 +1893,7 @@ test('iife-harness: copyTextToClipboard fully-failed fallback → describeClipbo
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
   const keys = buildStateKeys(listUrl);
   const snapshot = makeLargeListSnapshot(listUrl);
-  const { ctx, window, document } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window, document } = buildShortScanContext();
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
   window.confirm = () => true;
   ctx.confirm = window.confirm;
@@ -2081,12 +2010,7 @@ test('iife-harness: snapshot with deferred/pageQueue/nextSequentialPage exercise
     nextSequentialPage: 8,
     stats: { solved: 0, tried: 3, unattempted: 0, total: 3, pages: 1 },
   });
-  const { ctx, window } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window } = buildShortScanContext();
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
   window.confirm = () => true;
   ctx.confirm = window.confirm;
@@ -2105,12 +2029,7 @@ test('iife-harness: minimal-snapshot restore logs the compact-state notice', asy
     problems: [{ id: 1, name: 'p1', link: '/1', status: 'tried', userScore: 50, maxScore: 100 }],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
-  const { ctx, window } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window } = buildShortScanContext();
   // Seed under minimal key so restore picks it as 'minimal' kind.
   window.localStorage.setItem(keys.minimal, JSON.stringify(snapshot));
   window.confirm = () => true;
@@ -2591,35 +2510,20 @@ test('iife-harness: filter inputs + quota-throwing storage trigger requestRender
 });
 
 test('iife-harness: import invalid JSON → early return with invalid-file log', async () => {
-  const { ctx, window, document } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window, document } = buildShortScanContext();
   await startAndDrain(ctx, window, 4);
   await dispatchImport(window, document, '{ not valid JSON', 'bad.json');
 });
 
 test('iife-harness: import with file.text() throwing hits the catch branch', async () => {
-  const { ctx, window, document } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window, document } = buildShortScanContext();
   await startAndDrain(ctx, window, 4);
   await dispatchImportFailing(window, document);
 });
 
 test('iife-harness: import with pageLink mismatch + confirm rejects → early return', async () => {
   const importable = makeEmptySnapshot('https://different.example.com/list');
-  const { ctx, window, document } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window, document } = buildShortScanContext();
   // confirm returns false → user declines the remap → import exits early.
   window.confirm = () => false;
   ctx.confirm = window.confirm;
@@ -2629,12 +2533,7 @@ test('iife-harness: import with pageLink mismatch + confirm rejects → early re
 
 test('iife-harness: import JSON + quota-throwing storage → import failed branch', async () => {
   const importable = makeEmptySnapshot();
-  const { ctx, window, document } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window, document } = buildShortScanContext();
   // Storage setItem always throws so saveImportedSnapshot fails for every
   // level it tries — this hits the !res.ok branch of the import handler.
   window.localStorage.setItem = () => {
@@ -2656,12 +2555,7 @@ test('iife-harness: import JSON flow with a stubbed file triggers saveImportedSn
     ],
     stats: { solved: 1, tried: 0, unattempted: 0, total: 1, pages: 1 },
   });
-  const { ctx, window, document } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window, document } = buildShortScanContext();
   window.confirm = () => true;
   ctx.confirm = window.confirm;
   await startAndDrain(ctx, window, 4);
@@ -2679,12 +2573,7 @@ test('iife-harness: restore minimal-only saved state hits kind=minimal note log'
     problems: [{ id: 3, name: 'mini', link: '/3', status: 'tried', userScore: 30, maxScore: 100 }],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
-  const { ctx, window } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window } = buildShortScanContext();
   seedSnapshotRestore({ ctx, window, listUrl, snap, keysFullOverride: keys.minimal });
   await startAndDrain(ctx, window, 8);
 });
@@ -2700,12 +2589,7 @@ test('iife-harness: restore progress-level saved state hits kind=minimal+progres
     problems: [],
     stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
   });
-  const { ctx, window } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window } = buildShortScanContext();
   seedSnapshotRestore({ ctx, window, listUrl, snap, keysFullOverride: keys.minimal });
   await startAndDrain(ctx, window, 8);
 });
@@ -2715,12 +2599,7 @@ test('iife-harness: import with storage.setItem throwing on index writes logs sa
     problems: [{ id: 77, name: 'test', link: '/77', status: 'tried', userScore: 0, maxScore: 100 }],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
-  const { ctx, window, document } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window, document } = buildShortScanContext();
   // Wrap setItem so writes to state-index:* keys throw QuotaExceededError.
   // The snapshot-item write succeeds; the index write fails -> L3172-3176
   // noteStorageFailure + return { ok: false }.
@@ -2745,12 +2624,7 @@ test('iife-harness: import minimal-level snapshot hits the minimal fallback chai
     problems: [{ id: 55, name: 'min', link: '/55', status: 'tried', userScore: 25, maxScore: 100 }],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
   });
-  const { ctx, window, document } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window, document } = buildShortScanContext();
   window.confirm = () => true;
   ctx.confirm = window.confirm;
   await startAndDrain(ctx, window, 4);
@@ -2763,12 +2637,7 @@ test('iife-harness: import progress-level snapshot hits the progress-only chain'
     problems: [],
     stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
   });
-  const { ctx, window, document } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window, document } = buildShortScanContext();
   window.confirm = () => true;
   ctx.confirm = window.confirm;
   await startAndDrain(ctx, window, 4);
@@ -2783,12 +2652,7 @@ test('iife-harness: original pre-seeded snapshot triggers restoreFromSavedState'
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
   const keys = buildStateKeys(listUrl);
   const snapshot = makeEmptySnapshot(listUrl);
-  const { ctx, window } = buildContext({
-    fetchResponse: TERMINATOR_FETCH_RESPONSE,
-    modeOverrides: {
-      ...SHORT_SCAN_OVERRIDES,
-    },
-  });
+  const { ctx, window } = buildShortScanContext();
   // Seed the snapshot under the "full" key and accept the restore prompt.
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
   window.confirm = () => true;
