@@ -408,6 +408,37 @@ test('iife-harness: list scan against a "not found" body runs the response pipel
   }
 });
 
+test('iife-harness: iframe setup throws → default-console fallback catch fires', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  // Override createElement to throw for iframe tag → L1303-1304 catch fires.
+  const realCreate = ctx.document.createElement.bind(ctx.document);
+  ctx.document = {
+    ...ctx.document,
+    createElement: (tag) => {
+      if (tag === 'iframe') throw new Error('no iframes');
+      return realCreate(tag);
+    },
+    body: ctx.document.body,
+    head: ctx.document.head,
+    documentElement: ctx.document.documentElement,
+    getElementById: ctx.document.getElementById.bind(ctx.document),
+    querySelector: ctx.document.querySelector.bind(ctx.document),
+    querySelectorAll: ctx.document.querySelectorAll.bind(ctx.document),
+  };
+  await startAndDrain(ctx, window, 4);
+});
+
 test('iife-harness: console.clear throwing hits the outer iframe-console catch', async () => {
   const { ctx, window } = buildContext({
     fetchResponse: {
