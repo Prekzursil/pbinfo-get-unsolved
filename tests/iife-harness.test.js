@@ -57,6 +57,26 @@ async function startAndDrain(ctx, window, ticks = 8) {
   await drainMicrotasks(ticks);
 }
 
+// Boilerplate for restore-from-snapshot tests: seed keys.full with `snap`,
+// set window.confirm=true, and route the first prompt to listUrl so the
+// IIFE's pageLink matches the key hash. Returns the same { ctx, window }.
+function seedSnapshotRestore({ ctx, window, listUrl, snap, keysFullOverride }) {
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const key = keysFullOverride || keys.full;
+  window.localStorage.setItem(key, JSON.stringify(snap));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  let pcall = 0;
+  window.prompt = (_m, fallback) => {
+    pcall += 1;
+    if (pcall === 1) return listUrl;
+    return fallback ?? '';
+  };
+  ctx.prompt = window.prompt;
+  return { keys };
+}
+
 async function dispatchImport(window, document, fileBody, fileName = 'snapshot.json') {
   const inputs = Array.from(document.querySelectorAll('input[type="file"]'));
   for (const input of inputs) {
@@ -414,8 +434,6 @@ test('iife-harness: list scan against a "not found" body runs the response pipel
 
 test('iife-harness: restore prompt uses problems.length when stats.total missing', async () => {
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
-  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
-  const keys = buildStateKeys(listUrl);
   const snap = makeEmptySnapshot(listUrl, {
     problems: [
       { id: 1, name: 'a', link: '/1', status: 'tried', userScore: 10, maxScore: 100 },
@@ -435,16 +453,7 @@ test('iife-harness: restore prompt uses problems.length when stats.total missing
       PBINFO_GET_UNSOLVED_DELAY_MS: 0,
     },
   });
-  window.localStorage.setItem(keys.full, JSON.stringify(snap));
-  window.confirm = () => true;
-  ctx.confirm = window.confirm;
-  let pcall = 0;
-  window.prompt = (_m, fallback) => {
-    pcall += 1;
-    if (pcall === 1) return listUrl;
-    return fallback ?? '';
-  };
-  ctx.prompt = window.prompt;
+  seedSnapshotRestore({ ctx, window, listUrl, snap: snap });
   await startAndDrain(ctx, window, 8);
 });
 
@@ -880,8 +889,6 @@ test('iife-harness: stop scan during hanging fetch triggers AbortError path', as
 test('iife-harness: copy handlers with clipboard-api success hit the method=clipboard-api branch', async () => {
   // Seed a 1-problem snapshot so the copy buttons have something to serialize.
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
-  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
-  const keys = buildStateKeys(listUrl);
   const snapshot = makeEmptySnapshot(listUrl, {
     savedAt: Date.now(),
     seenProblemIds: [8],
@@ -910,16 +917,7 @@ test('iife-harness: copy handlers with clipboard-api success hit the method=clip
       PBINFO_GET_UNSOLVED_DELAY_MS: 0,
     },
   });
-  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
-  window.confirm = () => true;
-  ctx.confirm = window.confirm;
-  let pcall = 0;
-  window.prompt = (_m, fallback) => {
-    pcall += 1;
-    if (pcall === 1) return listUrl;
-    return fallback ?? '';
-  };
-  ctx.prompt = window.prompt;
+  seedSnapshotRestore({ ctx, window, listUrl, snap: snapshot });
   // Install a working clipboard.writeText stub inside the vm so the
   // clipboard-api branch of copyTextViaClipboardApi resolves and L1910
   // returns { method: 'clipboard-api' }.
@@ -1692,8 +1690,6 @@ test('iife-harness: pause then resume re-schedules kicks via togglePause !paused
 
 test('iife-harness: restore with filter.scoreMin/Max seeds input.value at setupControls', async () => {
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
-  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
-  const keys = buildStateKeys(listUrl);
   const snap = makeEmptySnapshot(listUrl, {
     problems: [{ id: 1, name: 'a', link: '/1', status: 'tried', userScore: 50, maxScore: 100 }],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
@@ -1717,23 +1713,12 @@ test('iife-harness: restore with filter.scoreMin/Max seeds input.value at setupC
       PBINFO_GET_UNSOLVED_DELAY_MS: 0,
     },
   });
-  window.localStorage.setItem(keys.full, JSON.stringify(snap));
-  window.confirm = () => true;
-  ctx.confirm = window.confirm;
-  let pcall = 0;
-  window.prompt = (_m, fallback) => {
-    pcall += 1;
-    if (pcall === 1) return listUrl;
-    return fallback ?? '';
-  };
-  ctx.prompt = window.prompt;
+  seedSnapshotRestore({ ctx, window, listUrl, snap: snap });
   await startAndDrain(ctx, window, 8);
 });
 
 test('iife-harness: restore snapshot with resumeFromPage fallback + empty filters.statuses hits defaults', async () => {
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
-  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
-  const keys = buildStateKeys(listUrl);
   const snap = makeEmptySnapshot(listUrl, {
     problems: [{ id: 2, name: 'r', link: '/2', status: 'tried', userScore: 0, maxScore: 100 }],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
@@ -1761,16 +1746,7 @@ test('iife-harness: restore snapshot with resumeFromPage fallback + empty filter
       PBINFO_GET_UNSOLVED_DELAY_MS: 0,
     },
   });
-  window.localStorage.setItem(keys.full, JSON.stringify(snap));
-  window.confirm = () => true;
-  ctx.confirm = window.confirm;
-  let pcall = 0;
-  window.prompt = (_m, fallback) => {
-    pcall += 1;
-    if (pcall === 1) return listUrl;
-    return fallback ?? '';
-  };
-  ctx.prompt = window.prompt;
+  seedSnapshotRestore({ ctx, window, listUrl, snap: snap });
   await startAndDrain(ctx, window, 8);
 });
 
@@ -1869,8 +1845,6 @@ test('iife-harness: legacy v1 snapshot index merges with v2 via loadSnapshotInde
 
 test('iife-harness: restore from snapshot with only config.startPage hits the else-if fallback', async () => {
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
-  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
-  const keys = buildStateKeys(listUrl);
   const snap = makeEmptySnapshot(listUrl, {
     problems: [{ id: 1, name: 'a', link: '/1', status: 'tried', userScore: 10, maxScore: 100 }],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
@@ -1890,23 +1864,12 @@ test('iife-harness: restore from snapshot with only config.startPage hits the el
       PBINFO_GET_UNSOLVED_DELAY_MS: 0,
     },
   });
-  window.localStorage.setItem(keys.full, JSON.stringify(snap));
-  window.confirm = () => true;
-  ctx.confirm = window.confirm;
-  let pcall = 0;
-  window.prompt = (_m, fallback) => {
-    pcall += 1;
-    if (pcall === 1) return listUrl;
-    return fallback ?? '';
-  };
-  ctx.prompt = window.prompt;
+  seedSnapshotRestore({ ctx, window, listUrl, snap: snap });
   await startAndDrain(ctx, window, 8);
 });
 
 test('iife-harness: clicking a table-header anchor calls sortTable via preventDefault', async () => {
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
-  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
-  const keys = buildStateKeys(listUrl);
   const snap = makeEmptySnapshot(listUrl, {
     problems: [{ id: 1, name: 'a', link: '/1', status: 'tried', userScore: 10, maxScore: 100 }],
     stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
@@ -1923,16 +1886,7 @@ test('iife-harness: clicking a table-header anchor calls sortTable via preventDe
       PBINFO_GET_UNSOLVED_DELAY_MS: 0,
     },
   });
-  window.localStorage.setItem(keys.full, JSON.stringify(snap));
-  window.confirm = () => true;
-  ctx.confirm = window.confirm;
-  let pcall = 0;
-  window.prompt = (_m, fallback) => {
-    pcall += 1;
-    if (pcall === 1) return listUrl;
-    return fallback ?? '';
-  };
-  ctx.prompt = window.prompt;
+  seedSnapshotRestore({ ctx, window, listUrl, snap: snap });
   await startAndDrain(ctx, window, 8);
   // Click every header anchor inside the vm so the in-IIFE click handler
   // (preventDefault + sortTable) fires.
@@ -1952,8 +1906,6 @@ test('iife-harness: clicking a table-header anchor calls sortTable via preventDe
 
 test('iife-harness: small chunk + 200-problem snapshot triggers scheduleChunk reschedule', async () => {
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
-  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
-  const keys = buildStateKeys(listUrl);
   const snapshot = makeLargeListSnapshot(listUrl);
   const { ctx, window } = buildContext({
     fetchResponse: {
@@ -1971,16 +1923,7 @@ test('iife-harness: small chunk + 200-problem snapshot triggers scheduleChunk re
       PBINFO_GET_UNSOLVED_RENDER_CHUNK_SIZE: 50,
     },
   });
-  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
-  window.confirm = () => true;
-  ctx.confirm = window.confirm;
-  let pcall = 0;
-  window.prompt = (_m, fallback) => {
-    pcall += 1;
-    if (pcall === 1) return listUrl;
-    return fallback ?? '';
-  };
-  ctx.prompt = window.prompt;
+  seedSnapshotRestore({ ctx, window, listUrl, snap: snapshot });
   await startAndDrain(ctx, window, 12);
   try {
     window.sortTable?.('id');
