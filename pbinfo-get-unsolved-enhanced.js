@@ -870,12 +870,14 @@ function storageRemove(keys, storage = globalThis.localStorage) {
 
 function serializeFilterState(filterState) {
   const fs = filterState && typeof filterState === 'object' ? filterState : {};
-  const statuses =
-    fs.statuses instanceof Set
-      ? Array.from(fs.statuses)
-      : Array.isArray(fs.statuses)
-        ? fs.statuses.slice()
-        : [];
+  let statuses;
+  if (fs.statuses instanceof Set) {
+    statuses = Array.from(fs.statuses);
+  } else if (Array.isArray(fs.statuses)) {
+    statuses = fs.statuses.slice();
+  } else {
+    statuses = [];
+  }
   return {
     statuses,
     includeUnknownScore: Boolean(fs.includeUnknownScore),
@@ -976,7 +978,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       iFrame.style.display = 'none';
       document.body.appendChild(iFrame);
       const frameConsole = iFrame.contentWindow?.console;
-      if (frameConsole) window.console = frameConsole;
+      if (frameConsole) globalThis.console = frameConsole;
     } catch {
       /* keep default console */
     }
@@ -3563,6 +3565,21 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           param: config.pagination.param,
           pageBase: config.pagination.pageBase,
         });
+      }
+      // Sonar S5144: constrain the fetched URL to the pbinfo origin(s) — even
+      // though pageLink flows from a validated normalizeListUrl call, this
+      // keeps the assertion local and short-circuits redirects to other
+      // origins that a compromised prompt default could otherwise request.
+      try {
+        const u = new URL(url, location?.origin || 'https://www.pbinfo.ro');
+        const allowedHosts = new Set(['www.pbinfo.ro', 'pbinfo.ro']);
+        if (u.protocol !== 'https:' || !allowedHosts.has(u.host)) {
+          finalize();
+          return;
+        }
+      } catch {
+        finalize();
+        return;
       }
       fetch(url, {
         method: 'GET',

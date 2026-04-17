@@ -50,31 +50,39 @@ function buildContext({ modeOverrides = {}, fetchResponse } = {}) {
 
   // Timers — cap the number of synchronous setTimeout invocations so that
   // a fetch-returning-results path can't recurse indefinitely when it
-  // schedules follow-on pages.
+  // schedules follow-on pages. Return the monotonic counter so the IIFE
+  // sees distinct timer ids (Sonar S3516: functions must not always return
+  // the same value).
   let timerBudget = 40;
+  let timerId = 0;
   window.setTimeout = (fn) => {
-    if (timerBudget <= 0) return 0;
-    timerBudget -= 1;
-    try {
-      fn();
-    } catch {
-      /* swallow */
+    timerId += 1;
+    if (timerBudget > 0) {
+      timerBudget -= 1;
+      try {
+        fn();
+      } catch {
+        /* swallow */
+      }
     }
-    return 0;
+    return timerId;
   };
   window.clearTimeout = () => {};
   window.setInterval = () => 0;
   window.clearInterval = () => {};
   let rafBudget = 20;
+  let rafId = 0;
   window.requestAnimationFrame = (fn) => {
-    if (rafBudget <= 0) return 1;
-    rafBudget -= 1;
-    try {
-      fn(Date.now());
-    } catch {
-      /* swallow */
+    rafId += 1;
+    if (rafBudget > 0) {
+      rafBudget -= 1;
+      try {
+        fn(Date.now());
+      } catch {
+        /* swallow */
+      }
     }
-    return 1;
+    return rafId;
   };
   window.cancelAnimationFrame = () => {};
 
