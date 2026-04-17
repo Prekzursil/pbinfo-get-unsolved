@@ -28,6 +28,33 @@ function loadLibraryInto(ctx) {
   vm.runInContext(LIBRARY_SOURCE, ctx, { filename: LIBRARY_PATH }); // NOSONAR: javascript:S1523 — executing our own pinned library source (read once at module load) in an isolated vm context for branch-coverage purposes; never evaluates user input.
 }
 
+async function drainMicrotasks(ticks = 8) {
+  for (let i = 0; i < ticks; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+}
+
+async function startAndDrain(ctx, window, ticks = 8) {
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* harness is best-effort */
+  }
+  await drainMicrotasks(ticks);
+}
+
+function installSequencedFetch(window, ctx, responses) {
+  let call = 0;
+  window.fetch = () => {
+    const idx = call;
+    call += 1;
+    const r = responses[idx] ?? responses[responses.length - 1];
+    return Promise.resolve(r);
+  };
+  ctx.fetch = window.fetch;
+}
+
 // Deterministic 200-problem snapshot builder used by a couple of coverage
 // harness scenarios. Extracted to keep Sonar's duplication metric under 3%.
 function makeLargeListSnapshot(listUrl) {
@@ -312,15 +339,7 @@ test('iife-harness: list scan with debug enabled exercises debugDumpCard on pars
     });
   };
   ctx.fetch = window.fetch;
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 8; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 8);
 });
 
 test('iife-harness: list scan parses a real pbinfo card and drains without hanging', async () => {
@@ -360,15 +379,7 @@ test('iife-harness: list scan parses a real pbinfo card and drains without hangi
     });
   };
   ctx.fetch = window.fetch;
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 8; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 8);
 });
 
 test('iife-harness: id-range scan against a /probleme/N problem page drains', async () => {
@@ -400,15 +411,7 @@ test('iife-harness: id-range scan against a /probleme/N problem page drains', as
       PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: false,
     },
   });
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 8; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 8);
 });
 
 test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persistence helpers', async () => {
@@ -476,15 +479,7 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
   const promptReplies = [listUrl, 'seed'];
   window.prompt = () => promptReplies[promptCalls++] ?? null;
   ctx.prompt = window.prompt;
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 8; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 8);
   // Pre-select the seeded snapshot on the state dropdown so the load /
   // clear buttons exercise loadSnapshotItem + deleteSnapshotItem instead
   // of the autosave fall-through branch. linkedom makes `select.value` a
@@ -547,15 +542,7 @@ test('iife-harness: overlay=true + closeOverlay exercise the overlay teardown br
   });
   window.confirm = () => true;
   ctx.confirm = window.confirm;
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 4; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 4);
   try {
     window.closeOverlay?.();
   } catch {
@@ -594,15 +581,7 @@ test('iife-harness: id-range score-batch success path exercises fetchIdRangeScor
     });
   };
   ctx.fetch = window.fetch;
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 12; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 12);
   // Explicitly stop if still running so the test does not outlive the
   // timer budget.
   try {
@@ -634,15 +613,7 @@ test('iife-harness: 200-problem restored snapshot triggers scheduleChunk + clear
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
   window.confirm = () => true;
   ctx.confirm = window.confirm;
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 12; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 12);
   // Click every button — the state select is left at its default value
   // (empty / autosave sentinel), so clearStateBtn falls through to
   // clearSavedStateForLink instead of deleteSnapshotItem.
@@ -683,15 +654,7 @@ async function runScoreBatchScenarioWithRetries(firstResponse) {
     );
   };
   ctx.fetch = window.fetch;
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 10; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 10);
 }
 
 test('iife-harness: score-batch cloudflare response with retries remaining takes retry branch', async () => {
@@ -733,15 +696,7 @@ test('iife-harness: virtualize rows + 200-problem snapshot displays the virtuali
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
   window.confirm = () => true;
   ctx.confirm = window.confirm;
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 10; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 10);
 });
 
 test('iife-harness: DELAY_MS > 0 makes schedule() route through setTimeout', async () => {
@@ -757,15 +712,7 @@ test('iife-harness: DELAY_MS > 0 makes schedule() route through setTimeout', asy
       PBINFO_GET_UNSOLVED_DELAY_MS: 50,
     },
   });
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 8; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 8);
 });
 
 test('iife-harness: list-mode empty body with total=5 triggers empty-page retry', async () => {
@@ -773,8 +720,7 @@ test('iife-harness: list-mode empty body with total=5 triggers empty-page retry'
     fetchResponse: {
       ok: true,
       status: 200,
-      text: async () =>
-        '<body><span class="numar_probleme">5</span><div class="row"></div></body>',
+      text: async () => '<body><span class="numar_probleme">5</span><div class="row"></div></body>',
     },
     modeOverrides: {
       PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
@@ -782,15 +728,7 @@ test('iife-harness: list-mode empty body with total=5 triggers empty-page retry'
       PBINFO_GET_UNSOLVED_DELAY_MS: 0,
     },
   });
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 8; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 8);
 });
 
 test('iife-harness: copyTextToClipboard fallback branches via clipboard-throws + execCommand stub', async () => {
@@ -823,15 +761,7 @@ test('iife-harness: copyTextToClipboard fallback branches via clipboard-throws +
     },
   };
   Object.defineProperty(document, 'execCommand', { value: () => true, configurable: true });
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 4; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 4);
   // Click every button so copyLinks/copyIds/copyMarkdown fire.
   const buttons = Array.from(document.querySelectorAll('button'));
   for (const btn of buttons) {
@@ -874,15 +804,7 @@ test('iife-harness: copyTextToClipboard fully-failed fallback → describeClipbo
     },
   };
   Object.defineProperty(document, 'execCommand', { value: () => false, configurable: true });
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 4; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 4);
   const buttons = Array.from(document.querySelectorAll('button'));
   for (const btn of buttons) {
     try {
@@ -909,15 +831,7 @@ test('iife-harness: cloudflare body with retries left exercises the retry-setTim
       PBINFO_GET_UNSOLVED_DELAY_MS: 0,
     },
   });
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 6; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 6);
 });
 
 test('iife-harness: id-range stopAfterMissing triggers automatic finishScan', async () => {
@@ -938,15 +852,7 @@ test('iife-harness: id-range stopAfterMissing triggers automatic finishScan', as
       PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
     },
   });
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 8; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 8);
 });
 
 test('iife-harness: list scan with LIVE_RENDER=true + fully-decorated card exercises difficulty/postedBy parse + maybeLiveRender', async () => {
@@ -989,15 +895,7 @@ test('iife-harness: list scan with LIVE_RENDER=true + fully-decorated card exerc
     });
   };
   ctx.fetch = window.fetch;
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 8; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 8);
 });
 
 test('iife-harness: id-range snapshot restore covers the id-range branch of restoreFromSavedState', async () => {
@@ -1044,15 +942,7 @@ test('iife-harness: id-range snapshot restore covers the id-range branch of rest
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
   window.confirm = () => true;
   ctx.confirm = window.confirm;
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 8; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 8);
 });
 
 test('iife-harness: list-mode status 500 response + no retries → finishScan error branch', async () => {
@@ -1068,15 +958,7 @@ test('iife-harness: list-mode status 500 response + no retries → finishScan er
       PBINFO_GET_UNSOLVED_DELAY_MS: 0,
     },
   });
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 6; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 6);
 });
 
 async function runScoreBatchScenario(firstResponse) {
@@ -1103,15 +985,7 @@ async function runScoreBatchScenario(firstResponse) {
     );
   };
   ctx.fetch = window.fetch;
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 10; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 10);
 }
 
 test('iife-harness: id-range score-batch 500 response walks the batch-failed branch', async () => {
@@ -1143,15 +1017,7 @@ test('iife-harness: list-mode "invalid request" body → dedicated Invalid reque
       PBINFO_GET_UNSOLVED_DELAY_MS: 0,
     },
   });
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 6; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 6);
 });
 
 test('iife-harness: mode-prompt returning null aborts the start', async () => {
@@ -1168,15 +1034,7 @@ test('iife-harness: mode-prompt returning null aborts the start', async () => {
   });
   window.prompt = () => null;
   ctx.prompt = window.prompt;
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 4; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 4);
 });
 
 test('iife-harness: id-range with debug enabled exercises the problem-page debug dump', async () => {
@@ -1211,15 +1069,7 @@ test('iife-harness: id-range with debug enabled exercises the problem-page debug
       PBINFO_GET_UNSOLVED_DEBUG_INCLUDE_HTML: true,
     },
   });
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 8; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 8);
 });
 
 test('iife-harness: id-range 403 forbidden response walks the forbidden-skip branch', async () => {
@@ -1239,15 +1089,7 @@ test('iife-harness: id-range 403 forbidden response walks the forbidden-skip bra
       PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
     },
   });
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 8; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 8);
 });
 
 test('iife-harness: id-range 404 missing response walks the not-found-skip branch', async () => {
@@ -1267,15 +1109,7 @@ test('iife-harness: id-range 404 missing response walks the not-found-skip branc
       PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
     },
   });
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 8; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 8);
 });
 
 test('iife-harness: no-requestAnimationFrame path exercises scheduleChunk setTimeout fallback', async () => {
@@ -1303,15 +1137,7 @@ test('iife-harness: no-requestAnimationFrame path exercises scheduleChunk setTim
   // falls back to the setTimeout arrow function (covers the last
   // uncovered function in c8's map).
   delete window.requestAnimationFrame;
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 12; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 12);
   // Explicitly invoke sortTable → updateTable with 200 rows; that
   // triggers the first chunk + scheduleChunk call for the second.
   try {
@@ -1352,15 +1178,7 @@ test('iife-harness: filter inputs + quota-throwing storage trigger requestRender
     clear: () => {},
   };
   ctx.localStorage = window.localStorage;
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 4; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 4);
   // Dispatch input events on the min/max score and search inputs to fire
   // requestRenderResults.
   const numberInputs = Array.from(document.querySelectorAll('input[type="number"]'));
@@ -1429,15 +1247,7 @@ test('iife-harness: import JSON flow with a stubbed file triggers saveImportedSn
   });
   window.confirm = () => true;
   ctx.confirm = window.confirm;
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 4; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 4);
   // Find the file input the import button created and feed it a fake file.
   const inputs = Array.from(document.querySelectorAll('input[type="file"]'));
   for (const input of inputs) {
@@ -1499,15 +1309,7 @@ test('iife-harness: original pre-seeded snapshot triggers restoreFromSavedState'
   window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
   window.confirm = () => true;
   ctx.confirm = window.confirm;
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 8; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 8);
 });
 
 test('iife-harness: list scan against a blocked cloudflare-ish body exercises the retry path', async () => {
@@ -1525,15 +1327,7 @@ test('iife-harness: list scan against a blocked cloudflare-ish body exercises th
       PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
     },
   });
-  loadLibraryInto(ctx);
-  try {
-    window.pbinfoGetUnsolvedStart();
-  } catch {
-    /* ignore */
-  }
-  for (let i = 0; i < 4; i++) {
-    await new Promise((r) => setImmediate(r));
-  }
+  await startAndDrain(ctx, window, 4);
 });
 
 function callHook(window, name, arg) {
