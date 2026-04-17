@@ -408,6 +408,42 @@ test('iife-harness: list scan against a "not found" body runs the response pipel
   }
 });
 
+test('iife-harness: restore prompt uses problems.length when stats.total missing', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const snap = makeEmptySnapshot(listUrl, {
+    problems: [
+      { id: 1, name: 'a', link: '/1', status: 'tried', userScore: 10, maxScore: 100 },
+      { id: 2, name: 'b', link: '/2', status: 'tried', userScore: 20, maxScore: 100 },
+    ],
+    stats: { solved: 0, tried: 2, unattempted: 0, total: 'not-a-number', pages: 1 },
+  });
+  const { ctx, window } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.localStorage.setItem(keys.full, JSON.stringify(snap));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  let pcall = 0;
+  window.prompt = (_m, fallback) => {
+    pcall += 1;
+    if (pcall === 1) return listUrl;
+    return fallback ?? '';
+  };
+  ctx.prompt = window.prompt;
+  await startAndDrain(ctx, window, 8);
+});
+
 test('iife-harness: iframe setup throws → default-console fallback catch fires', async () => {
   const { ctx, window } = buildContext({
     fetchResponse: {
@@ -968,6 +1004,74 @@ test('iife-harness: copy handlers with execCommand-success fallback hit the meth
     ctx
   ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
   await drainMicrotasks(6);
+});
+
+test('iife-harness: deleteSnapshotItem with throwing index write hits failure log', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const now = Date.now();
+  const indexItem = {
+    id: 'doomed',
+    savedAt: now,
+    storageLevel: 'full',
+    label: 'x',
+    storageVersion: 2,
+  };
+  const snapshot = makeEmptySnapshot(listUrl, {
+    savedAt: now,
+    problems: [],
+    stats: { solved: 0, tried: 0, unattempted: 0, total: 0, pages: 0 },
+  });
+  const { ctx, window: win } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  win.localStorage.setItem(keys.index, JSON.stringify([indexItem]));
+  win.localStorage.setItem(`${keys.itemPrefix}doomed`, JSON.stringify(snapshot));
+  win.confirm = () => true;
+  ctx.confirm = win.confirm;
+  let pcall = 0;
+  win.prompt = (_m, fallback) => {
+    pcall += 1;
+    if (pcall === 1) return listUrl;
+    return fallback ?? '';
+  };
+  ctx.prompt = win.prompt;
+  await startAndDrain(ctx, win, 8);
+  // After load, wrap setItem to fail for index writes. Then click Șterge
+  // with the snapshot option selected -> deleteSnapshotItem's index write
+  // fails -> L3056-3058 failure return.
+  const realSet = win.localStorage.setItem.bind(win.localStorage);
+  win.localStorage.setItem = (k, v) => {
+    if (typeof k === 'string' && k.includes('state-index')) {
+      const err = new Error('QuotaExceededError');
+      err.name = 'QuotaExceededError';
+      throw err;
+    }
+    return realSet(k, v);
+  };
+  const sel = overrideSelectValueToSnapshot(ctx.document);
+  vm.runInContext(
+    `
+    (() => {
+      const btn = Array.from(document.querySelectorAll('button'))
+        .find((b) => (b.textContent || '').trim() === 'Șterge');
+      if (btn) btn.dispatchEvent(new window.Event('click', { bubbles: true }));
+    })();
+  `,
+    ctx
+  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  await drainMicrotasks(4);
+  sel?.__restoreProto?.();
 });
 
 test('iife-harness: pruneSnapshotIndex evicts past max=8 snapshots on save', async () => {
