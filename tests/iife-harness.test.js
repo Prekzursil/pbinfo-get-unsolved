@@ -335,6 +335,41 @@ test('iife-harness: list debug scan with unattempted card hits debugDumpCard wit
   await startAndDrain(ctx, window, 8);
 });
 
+test('iife-harness: list scan with MAX_PAGES < total hits the cap warning', async () => {
+  // A numar_probleme of 500 with page size 10 implies 50 pages. MAX_PAGES=1
+  // triggers the "totalPages exceeds maxPages" addLog branch.
+  const body = `<!doctype html><html><body>
+    <span class="numar_probleme">500</span>
+    <div class="row">
+      <div class="card mb-3">
+        <code>#1</code>
+        <a href="/probleme/1/x" class="text-dark"><h5>#1 x</h5></a>
+        <div class="card-footer"><span class="badge" title="Punctaj obtinut">50</span></div>
+      </div>
+    </div>
+  </body></html>`;
+  let n = 0;
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_PAGE_SIZE: 10,
+    },
+  });
+  window.fetch = () => {
+    n += 1;
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      text: async () => (n === 1 ? body : '<body>Pagina nu exista.</body>'),
+    });
+  };
+  ctx.fetch = window.fetch;
+  await startAndDrain(ctx, window, 8);
+});
+
 test('iife-harness: list scan with debug enabled exercises debugDumpCard on parse failures', async () => {
   const body = `<!doctype html><html><body>
     <div class="row">
