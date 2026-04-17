@@ -694,6 +694,73 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
   }
 });
 
+test('iife-harness: copy handlers with execCommand-success fallback hit the method branch', async () => {
+  // Seed a 1-problem snapshot so the copy buttons have something to serialize.
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const snapshot = makeEmptySnapshot(listUrl, {
+    savedAt: Date.now(),
+    seenProblemIds: [7],
+    problems: [
+      {
+        id: 7,
+        name: 'Copy target',
+        link: '/probleme/7/copy',
+        difficulty: 1,
+        status: 'tried',
+        userScore: 50,
+        maxScore: 100,
+      },
+    ],
+    stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
+  });
+  const { ctx, window, document } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  // Route the first prompt (link) to listUrl so pageLink matches seeded keys.
+  let pcall = 0;
+  window.prompt = (_m, fallback) => {
+    pcall += 1;
+    if (pcall === 1) return listUrl;
+    return fallback ?? '';
+  };
+  ctx.prompt = window.prompt;
+  // Stub document.execCommand('copy') to return true so the fallback path
+  // in copyTextToClipboard resolves { method: 'execCommand' } and the
+  // copy-link / copy-id / copy-markdown handlers log the "fallback legacy"
+  // message (covers the execCommand branch in each handler).
+  document.execCommand = () => true;
+  await startAndDrain(ctx, window, 8);
+  // Fire the three copy buttons inside the vm so listeners see the click.
+  vm.runInContext(
+    `
+    (() => {
+      const names = ['Copiază link-uri', 'Copiază ID-uri', 'Copiază Markdown'];
+      for (const name of names) {
+        const btn = Array.from(document.querySelectorAll('button'))
+          .find((b) => (b.textContent || '').trim() === name);
+        if (btn) btn.dispatchEvent(new window.Event('click', { bubbles: true }));
+      }
+    })();
+  `,
+    ctx
+  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  await drainMicrotasks(6);
+});
+
 test('iife-harness: pruneSnapshotIndex evicts past max=8 snapshots on save', async () => {
   const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
   const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
