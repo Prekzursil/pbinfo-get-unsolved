@@ -814,6 +814,35 @@ async function runScoreBatchScenarioWithRetries(firstResponse) {
   await startAndDrain(ctx, window, 10);
 }
 
+test('iife-harness: score-batch fetch rejection with retries hits the network-error retry branch', async () => {
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MODE: 'id-range',
+      PBINFO_GET_UNSOLVED_ID_START: 7,
+      PBINFO_GET_UNSOLVED_ID_END: 7,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH: true,
+      PBINFO_GET_UNSOLVED_ID_SCORE_BATCH_SIZE: 200,
+      PBINFO_GET_UNSOLVED_CONCURRENCY: 1,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 1,
+    },
+  });
+  let call = 0;
+  window.fetch = () => {
+    call += 1;
+    return call === 1
+      ? Promise.reject(new Error('ECONNRESET'))
+      : Promise.resolve({
+          ok: false,
+          status: 404,
+          text: async () => '<body>Pagina nu exista.</body>',
+        });
+  };
+  ctx.fetch = window.fetch;
+  await startAndDrain(ctx, window, 10);
+});
+
 test('iife-harness: score-batch cloudflare response with retries remaining takes retry branch', async () => {
   await runScoreBatchScenarioWithRetries({
     ok: true,
