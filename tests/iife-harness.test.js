@@ -452,17 +452,43 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
   for (let i = 0; i < 8; i++) {
     await new Promise((r) => setImmediate(r));
   }
+  // Pre-select the seeded snapshot on the state dropdown so the load /
+  // clear buttons exercise loadSnapshotItem + deleteSnapshotItem instead
+  // of the autosave fall-through branch. linkedom makes `select.value` a
+  // getter-only property on HTMLSelectElement, so we shadow it.
+  const selects = Array.from(document.querySelectorAll('select'));
+  for (const sel of selects) {
+    const snapshotOption = Array.from(sel.options || []).find((o) =>
+      (o.value || '').startsWith('snapshot:')
+    );
+    if (snapshotOption) {
+      try {
+        Object.defineProperty(sel, 'value', {
+          configurable: true,
+          get() {
+            return snapshotOption.value;
+          },
+          set() {
+            /* ignore */
+          },
+        });
+      } catch {
+        /* best effort */
+      }
+      break;
+    }
+  }
   // After init, click every button to exercise load/save/clear/export/import
   // snapshot handlers against the pre-seeded state.
   const controls = Array.from(document.querySelectorAll('button, select'));
   for (const ctrl of controls) {
     try {
       if (ctrl.tagName === 'SELECT') {
-        ctrl.value = 'dark';
-        ctrl.dispatchEvent(new window.Event('change', { bubbles: true }));
-      } else {
-        ctrl.dispatchEvent(new window.Event('click', { bubbles: true }));
+        // keep pre-selected snapshot — skip the change event so the load
+        // button still sees the snapshot:* value.
+        continue;
       }
+      ctrl.dispatchEvent(new window.Event('click', { bubbles: true }));
     } catch {
       /* best effort */
     }
