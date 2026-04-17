@@ -531,8 +531,10 @@ test('iife-harness: overlay=true + closeOverlay exercise the overlay teardown br
 });
 
 test('iife-harness: id-range score-batch success path exercises fetchIdRangeScoreBatch + processIdRangeFromScoreBatch', async () => {
+  // scor=100 so processIdRangeFromScoreBatch's short-circuit path runs
+  // (it only kicks in when the cached score is a full solve).
   const batchPayload = JSON.stringify({
-    data: [{ id_problema: 7, scor: '42' }],
+    data: [{ id_problema: 7, scor: '100' }],
   });
   let call = 0;
   const { ctx, window } = buildContext({
@@ -573,6 +575,151 @@ test('iife-harness: id-range score-batch success path exercises fetchIdRangeScor
   try {
     window.stopScan?.('harness');
   } catch {}
+  for (let i = 0; i < 4; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
+test('iife-harness: 200-problem restored snapshot triggers scheduleChunk + clearSavedStateForLink on autosave clear', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const problems = [];
+  for (let i = 0; i < 200; i++) {
+    problems.push({
+      id: i + 1,
+      name: `p${i + 1}`,
+      link: `/probleme/${i + 1}/x`,
+      difficulty: 1,
+      status: 'tried',
+      userScore: 50,
+      maxScore: 100,
+    });
+  }
+  const snapshot = {
+    version: 2,
+    schemaVersion: 2,
+    storageLevel: 'full',
+    savedAt: Date.now(),
+    pageLink: listUrl,
+    scanMode: 'list',
+    pagination: { mode: 'offset', param: 'start', pageBase: 1, pageSize: 10 },
+    scanStartPage: 1,
+    pageQueue: [],
+    deferred: [],
+    inFlightPages: [],
+    seenProblemIds: problems.map((p) => p.id),
+    problems,
+    stats: { solved: 0, tried: problems.length, unattempted: 0, total: problems.length, pages: 1 },
+  };
+  const { ctx, window, document } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_RENDER_CHUNK_SIZE: 50,
+    },
+  });
+  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 12; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+  // Click every button — the state select is left at its default value
+  // (empty / autosave sentinel), so clearStateBtn falls through to
+  // clearSavedStateForLink instead of deleteSnapshotItem.
+  const buttons = Array.from(document.querySelectorAll('button'));
+  for (const btn of buttons) {
+    try {
+      btn.dispatchEvent(new window.Event('click', { bubbles: true }));
+    } catch {
+      /* best effort */
+    }
+  }
+  for (let i = 0; i < 6; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+});
+
+test('iife-harness: filter inputs + quota-throwing storage trigger requestRenderResults + noteStorageFailure', async () => {
+  const { ctx, window, document } = buildContext({
+    fetchResponse: {
+      ok: true,
+      status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_AUTOSAVE: true,
+      PBINFO_GET_UNSOLVED_AUTOSAVE_MS: 1,
+      PBINFO_GET_UNSOLVED_AUTOSAVE_PAGES: 1,
+    },
+  });
+  // Quota-throwing storage so every setItem bubbles through noteStorageFailure.
+  window.localStorage = {
+    getItem: () => null,
+    setItem() {
+      const err = new Error('quota');
+      err.name = 'QuotaExceededError';
+      throw err;
+    },
+    removeItem: () => {},
+    clear: () => {},
+  };
+  ctx.localStorage = window.localStorage;
+  loadLibraryInto(ctx);
+  try {
+    window.pbinfoGetUnsolvedStart();
+  } catch {
+    /* ignore */
+  }
+  for (let i = 0; i < 4; i++) {
+    await new Promise((r) => setImmediate(r));
+  }
+  // Dispatch input events on the min/max score and search inputs to fire
+  // requestRenderResults.
+  const numberInputs = Array.from(document.querySelectorAll('input[type="number"]'));
+  for (const input of numberInputs) {
+    try {
+      input.value = '10';
+      input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    } catch {
+      /* best effort */
+    }
+  }
+  const textInputs = Array.from(document.querySelectorAll('input[type="text"]'));
+  for (const input of textInputs) {
+    try {
+      input.value = 'x';
+      input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    } catch {
+      /* best effort */
+    }
+  }
+  // Click save + clear state buttons with the autosave (no snapshot)
+  // selection so clearSavedStateForLink is reached.
+  const buttons = Array.from(document.querySelectorAll('button'));
+  for (const btn of buttons) {
+    try {
+      btn.dispatchEvent(new window.Event('click', { bubbles: true }));
+    } catch {
+      /* best effort */
+    }
+  }
   for (let i = 0; i < 4; i++) {
     await new Promise((r) => setImmediate(r));
   }
