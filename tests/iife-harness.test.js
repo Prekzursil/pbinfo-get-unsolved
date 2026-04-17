@@ -913,6 +913,136 @@ test('iife-harness: loadStateBtn autosave path via in-vm pause+load click', asyn
   sel?.__restoreProto?.();
 });
 
+test('iife-harness: loadStateBtn snapshot: branch via override + in-vm pause+load', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const savedAt = Date.now() - 1000;
+  const indexItem = {
+    id: 'loadme',
+    savedAt,
+    storageLevel: 'full',
+    label: 'test',
+    storageVersion: 2,
+  };
+  const snapshot = makeEmptySnapshot(listUrl, {
+    savedAt,
+    seenProblemIds: [9],
+    problems: [
+      {
+        id: 9,
+        name: 'Snap restore',
+        link: '/probleme/9/snap',
+        difficulty: 2,
+        status: 'tried',
+        userScore: 80,
+        maxScore: 100,
+      },
+    ],
+    stats: { solved: 0, tried: 1, unattempted: 0, total: 1, pages: 1 },
+  });
+  const { ctx, window, document } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  // Hanging fetch so inFlight never drains but the scan is not finished
+  // (guard in loadStateBtn requires paused || finished before inFlight check).
+  // Actually both guards must pass: !paused && !finished skip AND inFlight==0.
+  // With hanging fetch, inFlight becomes 1 -> we need the in-flight guard to
+  // pass. So use a fetch that resolves to a terminator body so scan
+  // finishes cleanly (finished=true, inFlight=0), then load can run.
+  window.fetch = () => Promise.resolve({
+    ok: true, status: 200,
+    text: async () => '<body>Pagina nu exista.</body>',
+  });
+  ctx.fetch = window.fetch;
+  window.localStorage.setItem(keys.full, JSON.stringify(snapshot));
+  window.localStorage.setItem(keys.index, JSON.stringify([indexItem]));
+  window.localStorage.setItem(`${keys.itemPrefix}loadme`, JSON.stringify(snapshot));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  let pcall = 0;
+  window.prompt = (_m, fallback) => {
+    pcall += 1;
+    if (pcall === 1) return listUrl;
+    return fallback ?? '';
+  };
+  ctx.prompt = window.prompt;
+  await startAndDrain(ctx, window, 8);
+  // Override select.value to the snapshot option so loadStateBtn takes the
+  // `startsWith('snapshot:')` branch.
+  const sel = overrideSelectValueToSnapshot(document);
+  // Click the Încarcă button inside the vm (scan already finished, so pause
+  // step is unnecessary).
+  vm.runInContext(
+    `
+    (() => {
+      const btn = Array.from(document.querySelectorAll('button'))
+        .find((b) => (b.textContent || '').trim() === 'Încarcă');
+      if (btn) btn.dispatchEvent(new window.Event('click', { bubbles: true }));
+    })();
+  `,
+    ctx
+  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  await drainMicrotasks(4);
+  sel?.__restoreProto?.();
+});
+
+test('iife-harness: loadStateBtn snapshot: branch with missing item returns "inexistent" log', async () => {
+  const listUrl = 'https://www.pbinfo.ro/?pagina=probleme-lista';
+  const { buildStateKeys } = require('../pbinfo-get-unsolved-enhanced.js');
+  const keys = buildStateKeys(listUrl);
+  const savedAt = Date.now() - 1000;
+  const indexItem = {
+    id: 'missing',
+    savedAt,
+    storageLevel: 'full',
+    label: 'gone',
+    storageVersion: 2,
+  };
+  const { ctx, window, document } = buildContext({
+    fetchResponse: {
+      ok: true, status: 200,
+      text: async () => '<body>Pagina nu exista.</body>',
+    },
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+    },
+  });
+  // Seed only the index, NOT the snapshot-item blob -> loadSnapshotItem
+  // returns null -> handler takes the "inexistent" log branch (L2441-2445).
+  window.localStorage.setItem(keys.index, JSON.stringify([indexItem]));
+  window.confirm = () => true;
+  ctx.confirm = window.confirm;
+  let pcall = 0;
+  window.prompt = (_m, fallback) => {
+    pcall += 1;
+    if (pcall === 1) return listUrl;
+    return fallback ?? '';
+  };
+  ctx.prompt = window.prompt;
+  await startAndDrain(ctx, window, 8);
+  const sel = overrideSelectValueToSnapshot(document);
+  vm.runInContext(
+    `
+    (() => {
+      const btn = Array.from(document.querySelectorAll('button'))
+        .find((b) => (b.textContent || '').trim() === 'Încarcă');
+      if (btn) btn.dispatchEvent(new window.Event('click', { bubbles: true }));
+    })();
+  `,
+    ctx
+  ); // NOSONAR: javascript:S1523 — harness-controlled dispatch snippet.
+  await drainMicrotasks(4);
+  sel?.__restoreProto?.();
+});
+
 test('iife-harness: loadStateBtn with no saved state hits the no-snapshot log', async () => {
   const { ctx, window } = buildContext({
     fetchResponse: null,
