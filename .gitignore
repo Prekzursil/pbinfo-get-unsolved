@@ -2,7 +2,15 @@ node_modules/
 
 dist/
 
+coverage/
+.nyc_output/
+
+# Local Claude Code / ralph-loop state
+.claude/
+.remember/
+
 .env
 .env.*
 
 .DS_Store
+

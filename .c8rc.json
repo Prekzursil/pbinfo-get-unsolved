@@ -1,0 +1,13 @@
+{
+  "all": true,
+  "include": ["pbinfo-get-unsolved-enhanced.js", "src/**/*.js"],
+  "exclude": ["dist/**", "tests/**", "scripts/**", "extension/**"],
+  "reporter": ["text", "text-summary", "lcov", "json-summary", "cobertura"],
+  "report-dir": "coverage",
+  "check-coverage": false,
+  "branches": 100,
+  "lines": 100,
+  "functions": 100,
+  "statements": 100,
+  "clean": true
+}

@@ -7,9 +7,11 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
-    "test": "node --test"
+    "test": "node --test",
+    "test:coverage": "c8 --config .c8rc.json node --test"
   },
   "devDependencies": {
+    "c8": "^11.0.0",
     "eslint": "^9.17.0",
     "eslint-config-prettier": "^9.1.0",
     "globals": "^15.13.0",
