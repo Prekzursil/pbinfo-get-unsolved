@@ -565,11 +565,26 @@ test('iife-harness: pre-seeded snapshot + confirm=true exercises snapshot persis
   const selects = Array.from(document.querySelectorAll('select'));
   for (const sel of selects) {
     // linkedom's HTMLSelectElement doesn't always expose .options; walk
-    // <option> children directly.
-    const snapshotOption = Array.from(sel.querySelectorAll('option')).find((o) =>
-      (o.value || '').startsWith('snapshot:')
-    );
+    // <option> children directly. Move the snapshot option to the front
+    // and mark it selected — linkedom reflects `value` from the first
+    // selected option, so this propagates cleanly to the IIFE.
+    const options = Array.from(sel.querySelectorAll('option'));
+    const snapshotOption = options.find((o) => (o.value || '').startsWith('snapshot:'));
     if (snapshotOption) {
+      for (const o of options) {
+        try {
+          o.removeAttribute('selected');
+        } catch {
+          /* best effort */
+        }
+      }
+      try {
+        snapshotOption.setAttribute('selected', 'selected');
+        sel.removeChild(snapshotOption);
+        sel.insertBefore(snapshotOption, sel.firstChild);
+      } catch {
+        /* best effort */
+      }
       try {
         Object.defineProperty(sel, 'value', {
           configurable: true,
@@ -1364,6 +1379,46 @@ test('iife-harness: no-requestAnimationFrame path exercises scheduleChunk setTim
   for (let i = 0; i < 6; i++) {
     await new Promise((r) => setImmediate(r));
   }
+});
+
+test('iife-harness: list scan with quota-throwing storage + autosave every=1 disables autosave on first save', async () => {
+  const body = `<!doctype html><html><body>
+    <div class="row">
+      <div class="card mb-3">
+        <code>#1</code>
+        <a href="/probleme/1/x" class="text-dark"><h5>#1 x</h5></a>
+        <div class="card-footer"><span class="badge" title="Punctaj obtinut">50</span></div>
+      </div>
+    </div>
+  </body></html>`;
+  let n = 0;
+  const { ctx, window } = buildContext({
+    fetchResponse: null,
+    modeOverrides: {
+      PBINFO_GET_UNSOLVED_MAX_PAGES: 1,
+      PBINFO_GET_UNSOLVED_MAX_RETRIES: 0,
+      PBINFO_GET_UNSOLVED_DELAY_MS: 0,
+      PBINFO_GET_UNSOLVED_AUTOSAVE: true,
+      PBINFO_GET_UNSOLVED_AUTOSAVE_MS: 5000,
+      PBINFO_GET_UNSOLVED_AUTOSAVE_PAGES: 1,
+    },
+  });
+  window.fetch = () => {
+    n += 1;
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      text: async () => (n === 1 ? body : '<body>Pagina nu exista.</body>'),
+    });
+  };
+  ctx.fetch = window.fetch;
+  window.localStorage.setItem = () => {
+    const err = new Error('quota');
+    err.name = 'QuotaExceededError';
+    throw err;
+  };
+  ctx.localStorage = window.localStorage;
+  await startAndDrain(ctx, window, 10);
 });
 
 test('iife-harness: filter inputs + quota-throwing storage trigger requestRenderResults + noteStorageFailure', async () => {
