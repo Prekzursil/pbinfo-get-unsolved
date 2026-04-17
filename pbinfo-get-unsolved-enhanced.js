@@ -3602,12 +3602,8 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
             return;
           }
 
-          let payload = null;
-          try {
-            payload = typeof responseText === 'string' ? JSON.parse(responseText) : responseText;
-          } catch {
-            payload = null;
-          }
+          const payload =
+            typeof responseText === 'string' ? safeJsonParse(responseText) : responseText;
 
           const data = Array.isArray(payload?.data) ? payload.data : [];
           for (const item of data) {
