@@ -132,6 +132,21 @@ function buildContext(options = {}) {
 
   const navigator = { clipboard, userAgent: 'harness' };
 
+  // URL.createObjectURL / revokeObjectURL are not implemented in Node's URL;
+  // provide a thin wrapper so the file-download helper runs under the harness.
+  const objectUrls = [];
+  function HarnessURL(...args) {
+    return new URL(...args);
+  }
+  HarnessURL.prototype = URL.prototype;
+  Object.setPrototypeOf(HarnessURL, URL);
+  HarnessURL.createObjectURL = (blob) => {
+    const id = `blob:harness/${objectUrls.length}`;
+    objectUrls.push({ id, blob });
+    return id;
+  };
+  HarnessURL.revokeObjectURL = () => {};
+
   let parsedHref = null;
   try {
     parsedHref = new URL(href);
@@ -192,7 +207,7 @@ function buildContext(options = {}) {
     clearInterval,
     setImmediate,
     queueMicrotask,
-    URL,
+    URL: HarnessURL,
     Blob:
       window.Blob ||
       class Blob {
@@ -236,7 +251,25 @@ function buildContext(options = {}) {
 
   vm.createContext(ctx);
 
-  return { ctx, window, document, localStorage, promptCalls, confirmCalls, fetchCalls, location };
+  const clipboardWrites = [];
+  const originalWriteText = clipboard.writeText;
+  clipboard.writeText = (text) => {
+    clipboardWrites.push(text);
+    return originalWriteText ? originalWriteText(text) : Promise.resolve();
+  };
+
+  return {
+    ctx,
+    window,
+    document,
+    localStorage,
+    promptCalls,
+    confirmCalls,
+    fetchCalls,
+    clipboardWrites,
+    objectUrls,
+    location,
+  };
 }
 
 function loadLibrary(harness) {
@@ -260,6 +293,48 @@ async function boot(harness, ticks = 12) {
   await drainMicrotasks(ticks);
 }
 
+function uiRoot(harness) {
+  return harness.document.getElementById('pbinfo-get-unsolved-root');
+}
+
+function findElements(harness, selector) {
+  const root = uiRoot(harness) || harness.document;
+  return Array.from(root.querySelectorAll(selector));
+}
+
+function clickByText(harness, text, selector = 'button') {
+  const el = findElements(harness, selector).find(
+    (node) => (node.textContent || '').trim() === text
+  );
+  if (el) {
+    el.click();
+  }
+  return el || null;
+}
+
+function clickAll(harness, selector) {
+  for (const el of findElements(harness, selector)) {
+    try {
+      el.click();
+    } catch {
+      /* best-effort */
+    }
+  }
+}
+
+function fireEvent(el, type) {
+  if (!el) {
+    return;
+  }
+  const evt = el.ownerDocument.createEvent ? el.ownerDocument.createEvent('Event') : { type };
+  if (typeof evt.initEvent === 'function') {
+    evt.initEvent(type, true, true);
+  } else {
+    evt.type = type;
+  }
+  el.dispatchEvent(evt);
+}
+
 module.exports = {
   LIBRARY_PATH,
   LIBRARY_SOURCE,
@@ -269,4 +344,9 @@ module.exports = {
   drainMicrotasks,
   makeLocalStorage,
   makeQuotaLocalStorage,
+  uiRoot,
+  findElements,
+  clickByText,
+  clickAll,
+  fireEvent,
 };
