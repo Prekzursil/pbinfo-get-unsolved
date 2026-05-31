@@ -67,6 +67,7 @@ function buildContext(options = {}) {
     quotaStorage = false,
     windowOverrides = {},
     clipboard = { writeText: async () => {} },
+    execCommandResult = true,
   } = options;
 
   const { window, document } = parseHTML(html);
@@ -95,6 +96,12 @@ function buildContext(options = {}) {
     }
     return el;
   };
+
+  // linkedom does not implement the legacy execCommand clipboard fallback.
+  if (typeof document.execCommand !== 'function') {
+    document.execCommand = () =>
+      typeof execCommandResult === 'function' ? execCommandResult() : execCommandResult;
+  }
 
   const localStorage = quotaStorage ? makeQuotaLocalStorage() : makeLocalStorage(localStorageSeed);
 
