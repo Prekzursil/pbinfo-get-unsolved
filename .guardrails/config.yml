@@ -11,8 +11,8 @@ ignore-paths:
   - coverage
   - docs
   - node_modules
-  - "**/node_modules/**"
-  - "tests/**"
+  - '**/node_modules/**'
+  - 'tests/**'
 
 engines:
   javascript:
