@@ -1,18 +1,21 @@
-```markdown
+````markdown
 # pbinfo-get-unsolved Development Patterns
 
 > Auto-generated skill from repository analysis
 
 ## Overview
+
 This skill teaches the core development patterns and conventions used in the `pbinfo-get-unsolved` TypeScript repository. It covers file and code organization, commit message standards, import/export styles, and testing patterns. By following these guidelines, contributors can maintain consistency and quality across the codebase.
 
 ## Coding Conventions
 
 ### File Naming
+
 - Use **camelCase** for file names.
   - Example: `getUnsolvedProblems.ts`
 
 ### Import Style
+
 - Use **relative imports** for modules within the project.
   - Example:
     ```typescript
@@ -20,8 +23,10 @@ This skill teaches the core development patterns and conventions used in the `pb
     ```
 
 ### Export Style
+
 - Use **named exports** instead of default exports.
   - Example:
+
     ```typescript
     // In fetchProblems.ts
     export function fetchProblems() { ... }
@@ -31,6 +36,7 @@ This skill teaches the core development patterns and conventions used in the `pb
     ```
 
 ### Commit Messages
+
 - Follow the **conventional commit** format.
 - Use prefixes such as `style` to indicate the type of change.
   - Example:
@@ -41,6 +47,7 @@ This skill teaches the core development patterns and conventions used in the `pb
 ## Workflows
 
 ### Style Commit Workflow
+
 **Trigger:** When making stylistic changes (e.g., renaming variables, reformatting code)
 **Command:** `/style-commit`
 
@@ -59,6 +66,7 @@ This skill teaches the core development patterns and conventions used in the `pb
 - The testing framework is **unknown**; check existing test files for structure and assertions.
 - Place test files alongside the modules they test or in a dedicated test directory.
 - Example test file structure:
+
   ```typescript
   import { getUnsolvedProblems } from './getUnsolvedProblems';
 
@@ -68,9 +76,14 @@ This skill teaches the core development patterns and conventions used in the `pb
     });
   });
   ```
+````
 
 ## Commands
-| Command         | Purpose                                              |
-|-----------------|------------------------------------------------------|
-| /style-commit   | Use when committing stylistic code changes           |
+
+| Command       | Purpose                                    |
+| ------------- | ------------------------------------------ |
+| /style-commit | Use when committing stylistic code changes |
+
+```
+
 ```
