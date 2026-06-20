@@ -1,0 +1,23 @@
+[tool.pytest.ini_options]
+# The lean quality gate (gate 3, Python coverage) detects a pytest config and
+# runs `pytest --cov --cov-branch --cov-fail-under=100`. testpaths scopes
+# collection to the Python test suite so the JS `tests/*.test.js` files are not
+# picked up by pytest.
+testpaths = ["tests/python"]
+pythonpath = ["scripts", "scripts/quality"]
+
+[tool.coverage.run]
+# Measure ONLY the first-party Python sources. branch=true mirrors the gate's
+# `--cov-branch` so branch coverage is enforced at 100%.
+branch = true
+source = ["scripts"]
+
+[tool.coverage.report]
+# 100% line+branch is the standing lean-gate policy. show_missing surfaces any
+# gap directly in the CI log.
+show_missing = true
+exclude_also = [
+    # `if __name__ == "__main__":` entrypoint guards are not exercised under the
+    # test runner (the module is imported, not run as a script).
+    'if __name__ == "__main__":',
+]

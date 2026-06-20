@@ -6,3 +6,13 @@ dist/
 .env.*
 
 .DS_Store
+
+# Python (quality scripts + their test suite)
+.venv/
+__pycache__/
+*.egg-info/
+.coverage
+.coverage.*
+.pytest_cache/
+htmlcov/
+coverage.xml
