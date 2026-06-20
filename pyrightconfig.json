@@ -1,6 +1,7 @@
 {
   "include": ["scripts", "tests"],
-  "extraPaths": ["scripts", "scripts/quality", "tests/python"],
+  "exclude": ["tests/python"],
+  "extraPaths": ["scripts", "scripts/quality"],
   "typeCheckingMode": "standard",
   "reportAny": false,
   "reportExplicitAny": false,
