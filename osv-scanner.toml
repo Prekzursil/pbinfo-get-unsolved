@@ -1,0 +1,13 @@
+# osv-scanner configuration for the lean dependency gate (pinned tool: osv-scanner 2.3.8).
+# The gate runs osv-scanner over the lockfile(s) and must report 0 actionable CVEs.
+#
+# POLICY: ignore entries are allowed ONLY for a genuinely-unfixable vuln (no
+# non-breaking upgrade) OR one provably not reachable in THIS product, each with
+# a reason + dated review note (greppable). No baseline file — clean-zero is
+# reached by upgrading where a safe fix exists.
+#
+# Lockfile scanned: package-lock.json (devDependencies only — eslint, prettier,
+# terser, linkedom, globals; this repo ships no runtime npm deps).
+#
+# No IgnoredVulns at adoption time. Add a dated, reasoned [[IgnoredVulns]] entry
+# here only for a future vuln that is genuinely unfixable or provably unreachable.

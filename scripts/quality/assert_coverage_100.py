@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import argparse
 import json
 import re
@@ -31,11 +33,21 @@ _XML_LINE_HITS_RE = re.compile(r"<line\\b[^>]*\\bhits=\"([0-9]+(?:\\.[0-9]+)?)\"
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Assert 100% coverage for all declared components.")
-    parser.add_argument("--xml", action="append", default=[], help="Coverage XML input: name=path")
-    parser.add_argument("--lcov", action="append", default=[], help="LCOV input: name=path")
-    parser.add_argument("--out-json", default="coverage-100/coverage.json", help="Output JSON path")
-    parser.add_argument("--out-md", default="coverage-100/coverage.md", help="Output markdown path")
+    parser = argparse.ArgumentParser(
+        description="Assert 100% coverage for all declared components."
+    )
+    parser.add_argument(
+        "--xml", action="append", default=[], help="Coverage XML input: name=path"
+    )
+    parser.add_argument(
+        "--lcov", action="append", default=[], help="LCOV input: name=path"
+    )
+    parser.add_argument(
+        "--out-json", default="coverage-100/coverage.json", help="Output JSON path"
+    )
+    parser.add_argument(
+        "--out-md", default="coverage-100/coverage.md", help="Output markdown path"
+    )
     return parser.parse_args()
 
 
@@ -63,7 +75,7 @@ def parse_coverage_xml(name: str, path: Path) -> CoverageStats:
         try:
             if int(float(hits_raw)) > 0:
                 covered += 1
-        except ValueError:
+        except ValueError:  # pragma: no cover - regex only captures numeric hits
             continue
 
     return CoverageStats(name=name, path=str(path), covered=covered, total=total)
@@ -87,20 +99,26 @@ def evaluate(stats: list[CoverageStats]) -> tuple[str, list[str]]:
     findings: list[str] = []
     for item in stats:
         if item.percent < 100.0:
-            findings.append(f"{item.name} coverage below 100%: {item.percent:.2f}% ({item.covered}/{item.total})")
+            findings.append(
+                f"{item.name} coverage below 100%: {item.percent:.2f}% ({item.covered}/{item.total})"
+            )
 
     combined_total = sum(item.total for item in stats)
     combined_covered = sum(item.covered for item in stats)
-    combined = 100.0 if combined_total <= 0 else (combined_covered / combined_total) * 100.0
+    combined = (
+        100.0 if combined_total <= 0 else (combined_covered / combined_total) * 100.0
+    )
 
     if combined < 100.0:
-        findings.append(f"combined coverage below 100%: {combined:.2f}% ({combined_covered}/{combined_total})")
+        findings.append(
+            f"combined coverage below 100%: {combined:.2f}% ({combined_covered}/{combined_total})"
+        )
 
     status = "pass" if not findings else "fail"
     return status, findings
 
 
-def _render_md(payload: dict) -> str:
+def _render_md(payload: Mapping[str, object]) -> str:
     lines = [
         "# Coverage 100 Gate",
         "",
@@ -110,17 +128,21 @@ def _render_md(payload: dict) -> str:
         "## Components",
     ]
 
-    for item in payload.get("components", []):
+    components = payload.get("components")
+    components = components if isinstance(components, list) else []
+    for item in components:
+        if not isinstance(item, Mapping):
+            continue
         lines.append(
             f"- `{item['name']}`: `{item['percent']:.2f}%` ({item['covered']}/{item['total']}) from `{item['path']}`"
         )
 
-    if not payload.get("components"):
+    if not components:
         lines.append("- None")
 
     lines.extend(["", "## Findings"])
-    findings = payload.get("findings") or []
-    if findings:
+    findings = payload.get("findings")
+    if isinstance(findings, list) and findings:
         lines.extend(f"- {finding}" for finding in findings)
     else:
         lines.append("- None")
@@ -153,7 +175,9 @@ def main() -> int:
         stats.append(parse_lcov(name, path))
 
     if not stats:
-        raise SystemExit("No coverage files were provided; pass --xml and/or --lcov inputs.")
+        raise SystemExit(
+            "No coverage files were provided; pass --xml and/or --lcov inputs."
+        )
 
     status, findings = evaluate(stats)
     payload = {
@@ -181,7 +205,9 @@ def main() -> int:
 
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_md.parent.mkdir(parents=True, exist_ok=True)
-    out_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    out_json.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     out_md.write_text(_render_md(payload), encoding="utf-8")
     print(out_md.read_text(encoding="utf-8"), end="")
 
