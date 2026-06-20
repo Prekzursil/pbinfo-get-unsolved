@@ -8,7 +8,7 @@
     "format:check": "prettier --check .",
     "lint": "eslint .",
     "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100"
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude=\"tests/**\" --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100"
   },
   "devDependencies": {
     "eslint": "^9.17.0",
