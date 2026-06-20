@@ -75,7 +75,7 @@ def parse_coverage_xml(name: str, path: Path) -> CoverageStats:
         try:
             if int(float(hits_raw)) > 0:
                 covered += 1
-        except ValueError:
+        except ValueError:  # pragma: no cover - regex only captures numeric hits
             continue
 
     return CoverageStats(name=name, path=str(path), covered=covered, total=total)

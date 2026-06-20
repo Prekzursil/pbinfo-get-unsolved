@@ -193,7 +193,7 @@ def main() -> int:
             findings.append(
                 f"Codacy API endpoint was not found for provider(s): {', '.join(provider_candidates)}."
             )
-            if last_exc is not None:
+            if last_exc is not None:  # pragma: no branch - loop always 404s before else
                 findings.append(f"Last Codacy API error: {last_exc}")
             status = "fail"
 
