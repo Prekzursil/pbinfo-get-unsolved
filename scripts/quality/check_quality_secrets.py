@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import argparse
 import json
 import os
@@ -77,7 +79,7 @@ def evaluate_env(
     }
 
 
-def _render_md(payload: dict) -> str:
+def _render_md(payload: Mapping[str, object]) -> str:
     lines = [
         "# Quality Secrets Preflight",
         "",
@@ -86,15 +88,15 @@ def _render_md(payload: dict) -> str:
         "",
         "## Missing secrets",
     ]
-    missing_secrets = payload.get("missing_secrets") or []
-    if missing_secrets:
+    missing_secrets = payload.get("missing_secrets")
+    if isinstance(missing_secrets, list) and missing_secrets:
         lines.extend(f"- `{name}`" for name in missing_secrets)
     else:
         lines.append("- None")
 
     lines.extend(["", "## Missing variables"])
-    missing_vars = payload.get("missing_vars") or []
-    if missing_vars:
+    missing_vars = payload.get("missing_vars")
+    if isinstance(missing_vars, list) and missing_vars:
         lines.extend(f"- `{name}`" for name in missing_vars)
     else:
         lines.append("- None")

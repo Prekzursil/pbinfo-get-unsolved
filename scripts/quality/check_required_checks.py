@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import argparse
 import json
 import os
 import sys
 import time
-import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -102,7 +103,7 @@ def _evaluate(
     return status, missing, failed
 
 
-def _render_md(payload: dict) -> str:
+def _render_md(payload: Mapping[str, object]) -> str:
     lines = [
         "# Quality Zero Gate - Required Contexts",
         "",
@@ -113,15 +114,15 @@ def _render_md(payload: dict) -> str:
         "## Missing contexts",
     ]
 
-    missing = payload.get("missing") or []
-    if missing:
+    missing = payload.get("missing")
+    if isinstance(missing, list) and missing:
         lines.extend(f"- `{name}`" for name in missing)
     else:
         lines.append("- None")
 
     lines.extend(["", "## Failed contexts"])
-    failed = payload.get("failed") or []
-    if failed:
+    failed = payload.get("failed")
+    if isinstance(failed, list) and failed:
         lines.extend(f"- {entry}" for entry in failed)
     else:
         lines.append("- None")

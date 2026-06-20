@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import argparse
 import json
 import re
@@ -116,7 +118,7 @@ def evaluate(stats: list[CoverageStats]) -> tuple[str, list[str]]:
     return status, findings
 
 
-def _render_md(payload: dict) -> str:
+def _render_md(payload: Mapping[str, object]) -> str:
     lines = [
         "# Coverage 100 Gate",
         "",
@@ -126,17 +128,21 @@ def _render_md(payload: dict) -> str:
         "## Components",
     ]
 
-    for item in payload.get("components", []):
+    components = payload.get("components")
+    components = components if isinstance(components, list) else []
+    for item in components:
+        if not isinstance(item, Mapping):
+            continue
         lines.append(
             f"- `{item['name']}`: `{item['percent']:.2f}%` ({item['covered']}/{item['total']}) from `{item['path']}`"
         )
 
-    if not payload.get("components"):
+    if not components:
         lines.append("- None")
 
     lines.extend(["", "## Findings"])
-    findings = payload.get("findings") or []
-    if findings:
+    findings = payload.get("findings")
+    if isinstance(findings, list) and findings:
         lines.extend(f"- {finding}" for finding in findings)
     else:
         lines.append("- None")

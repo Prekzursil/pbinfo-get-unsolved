@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import argparse
 import json
 import sys
@@ -19,7 +21,7 @@ _HELPER_ROOT = (
 if str(_HELPER_ROOT) not in sys.path:
     sys.path.insert(0, str(_HELPER_ROOT))
 
-from security_helpers import normalize_https_url  # noqa: E402 (import follows runtime sys.path bootstrap)
+from security_helpers import normalize_https_url  # noqa: E402  # pyright: ignore[reportImplicitRelativeImport] (standalone script: import resolved via runtime sys.path bootstrap above)
 
 SENTRY_API_BASE = "https://sentry.io/api/0"
 
@@ -80,7 +82,7 @@ def _hits_from_headers(headers: dict[str, str]) -> int | None:
         return None
 
 
-def _render_md(payload: dict) -> str:
+def _render_md(payload: Mapping[str, object]) -> str:
     lines = [
         "# Sentry Zero Gate",
         "",
@@ -91,15 +93,19 @@ def _render_md(payload: dict) -> str:
         "## Project results",
     ]
 
-    for item in payload.get("projects", []):
+    projects = payload.get("projects")
+    projects = projects if isinstance(projects, list) else []
+    for item in projects:
+        if not isinstance(item, Mapping):
+            continue
         lines.append(f"- `{item['project']}` unresolved=`{item['unresolved']}`")
 
-    if not payload.get("projects"):
+    if not projects:
         lines.append("- None")
 
     lines.extend(["", "## Findings"])
-    findings = payload.get("findings") or []
-    if findings:
+    findings = payload.get("findings")
+    if isinstance(findings, list) and findings:
         lines.extend(f"- {item}" for item in findings)
     else:
         lines.append("- None")

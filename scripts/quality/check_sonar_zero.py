@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import argparse
 import base64
 import json
@@ -20,7 +22,7 @@ _HELPER_ROOT = (
 if str(_HELPER_ROOT) not in sys.path:
     sys.path.insert(0, str(_HELPER_ROOT))
 
-from security_helpers import normalize_https_url  # noqa: E402 (import follows runtime sys.path bootstrap)
+from security_helpers import normalize_https_url  # noqa: E402  # pyright: ignore[reportImplicitRelativeImport] (standalone script: import resolved via runtime sys.path bootstrap above)
 
 SONAR_API_BASE = "https://sonarcloud.io"
 UNRESOLVED_HOTSPOT_STATUS = "TO_REVIEW"
@@ -70,7 +72,7 @@ def _request_json(url: str, auth_header: str) -> dict[str, Any]:
         return json.loads(resp.read().decode("utf-8"))
 
 
-def _render_md(payload: dict) -> str:
+def _render_md(payload: Mapping[str, object]) -> str:
     lines = [
         "# Sonar Zero Gate",
         "",
@@ -84,8 +86,8 @@ def _render_md(payload: dict) -> str:
         "",
         "## Findings",
     ]
-    findings = payload.get("findings") or []
-    if findings:
+    findings = payload.get("findings")
+    if isinstance(findings, list) and findings:
         lines.extend(f"- {item}" for item in findings)
     else:
         lines.append("- None")
