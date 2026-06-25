@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import argparse
 import json
 import os
 import sys
 import time
-import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,10 +15,14 @@ from typing import Any
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Wait for required GitHub check contexts and assert they are successful.")
+    parser = argparse.ArgumentParser(
+        description="Wait for required GitHub check contexts and assert they are successful."
+    )
     parser.add_argument("--repo", required=True, help="owner/repo")
     parser.add_argument("--sha", required=True, help="commit SHA")
-    parser.add_argument("--required-context", action="append", default=[], help="Required context name")
+    parser.add_argument(
+        "--required-context", action="append", default=[], help="Required context name"
+    )
     parser.add_argument("--timeout-seconds", type=int, default=900)
     parser.add_argument("--poll-seconds", type=int, default=20)
     parser.add_argument("--out-json", default="quality-zero-gate/required-checks.json")
@@ -41,7 +46,9 @@ def _api_get(repo: str, path: str, token: str) -> dict[str, Any]:
         return json.loads(resp.read().decode("utf-8"))
 
 
-def _collect_contexts(check_runs_payload: dict[str, Any], status_payload: dict[str, Any]) -> dict[str, dict[str, str]]:
+def _collect_contexts(
+    check_runs_payload: dict[str, Any], status_payload: dict[str, Any]
+) -> dict[str, dict[str, str]]:
     contexts: dict[str, dict[str, str]] = {}
 
     for run in check_runs_payload.get("check_runs", []) or []:
@@ -67,7 +74,9 @@ def _collect_contexts(check_runs_payload: dict[str, Any], status_payload: dict[s
     return contexts
 
 
-def _evaluate(required: list[str], contexts: dict[str, dict[str, str]]) -> tuple[str, list[str], list[str]]:
+def _evaluate(
+    required: list[str], contexts: dict[str, dict[str, str]]
+) -> tuple[str, list[str], list[str]]:
     missing: list[str] = []
     failed: list[str] = []
 
@@ -94,7 +103,7 @@ def _evaluate(required: list[str], contexts: dict[str, dict[str, str]]) -> tuple
     return status, missing, failed
 
 
-def _render_md(payload: dict) -> str:
+def _render_md(payload: Mapping[str, object]) -> str:
     lines = [
         "# Quality Zero Gate - Required Contexts",
         "",
@@ -105,15 +114,15 @@ def _render_md(payload: dict) -> str:
         "## Missing contexts",
     ]
 
-    missing = payload.get("missing") or []
-    if missing:
+    missing = payload.get("missing")
+    if isinstance(missing, list) and missing:
         lines.extend(f"- `{name}`" for name in missing)
     else:
         lines.append("- None")
 
     lines.extend(["", "## Failed contexts"])
-    failed = payload.get("failed") or []
-    if failed:
+    failed = payload.get("failed")
+    if isinstance(failed, list) and failed:
         lines.extend(f"- {entry}" for entry in failed)
     else:
         lines.append("- None")
@@ -136,7 +145,9 @@ def _safe_output_path(raw: str, fallback: str, base: Path | None = None) -> Path
 
 def main() -> int:
     args = _parse_args()
-    token = (os.environ.get("GITHUB_TOKEN", "") or os.environ.get("GH_TOKEN", "")).strip()
+    token = (
+        os.environ.get("GITHUB_TOKEN", "") or os.environ.get("GH_TOKEN", "")
+    ).strip()
     required = [item.strip() for item in args.required_context if item.strip()]
 
     if not required:
@@ -148,7 +159,9 @@ def main() -> int:
 
     final_payload: dict[str, Any] | None = None
     while time.time() <= deadline:
-        check_runs = _api_get(args.repo, f"commits/{args.sha}/check-runs?per_page=100", token)
+        check_runs = _api_get(
+            args.repo, f"commits/{args.sha}/check-runs?per_page=100", token
+        )
         statuses = _api_get(args.repo, f"commits/{args.sha}/status", token)
         contexts = _collect_contexts(check_runs, statuses)
         status, missing, failed = _evaluate(required, contexts)
@@ -168,7 +181,11 @@ def main() -> int:
             break
 
         # wait only while there are missing contexts or in-progress check-runs
-        in_progress = any(v.get("state") != "completed" for v in contexts.values() if v.get("source") == "check_run")
+        in_progress = any(
+            v.get("state") != "completed"
+            for v in contexts.values()
+            if v.get("source") == "check_run"
+        )
         if not missing and not in_progress:
             break
         time.sleep(max(args.poll_seconds, 1))
@@ -177,7 +194,9 @@ def main() -> int:
         raise SystemExit("No payload collected")
 
     try:
-        out_json = _safe_output_path(args.out_json, "quality-zero-gate/required-checks.json")
+        out_json = _safe_output_path(
+            args.out_json, "quality-zero-gate/required-checks.json"
+        )
         out_md = _safe_output_path(args.out_md, "quality-zero-gate/required-checks.md")
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
@@ -185,7 +204,9 @@ def main() -> int:
 
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_md.parent.mkdir(parents=True, exist_ok=True)
-    out_json.write_text(json.dumps(final_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    out_json.write_text(
+        json.dumps(final_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     out_md.write_text(_render_md(final_payload), encoding="utf-8")
     print(out_md.read_text(encoding="utf-8"), end="")
 

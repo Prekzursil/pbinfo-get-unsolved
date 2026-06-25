@@ -13,7 +13,7 @@ on:
   merge_group:
     types: [checks_requested]
   schedule:
-    - cron: "23 3 * * 1"
+    - cron: '23 3 * * 1'
   workflow_dispatch:
 
 jobs:

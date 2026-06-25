@@ -1,0 +1,45 @@
+# Lean quality gates — local auto-fixers + fast checks.
+# `pre-commit run --all-files` is the gate-1/gate-5 entrypoint used by CI
+# (.github/workflows/quality.yml -> reusable-quality.yml). Every rev is pinned.
+minimum_pre_commit_version: '3.5.0'
+
+exclude: |-
+  (?x)^(
+    node_modules/|
+    dist/|
+    build/|
+    out/|
+    docs/.*\.(png|jpg|jpeg|gif|svg)$|
+    package-lock\.json
+  )
+
+repos:
+  # --- Gate 1: JS/JS lint (oxlint) — charter autofixer for ts/js ---
+  - repo: https://github.com/oxc-project/mirrors-oxlint
+    rev: v1.69.0
+    hooks:
+      - id: oxlint
+        name: oxlint (lint --fix)
+        args: ['--config', '.oxlintrc.json', '--fix', '--deny-warnings']
+        files: '\.(js|cjs|mjs)$'
+        exclude: '(^|/)dist/'
+
+  # --- Gate 1: JS/JS format (Biome, format-only) — charter "Oxfmt" surrogate ---
+  # Oxfmt is not yet released as a stable standalone formatter; Biome format is
+  # the proven JS/JS formatter used by the reference lean repo (Prekzursil/Reframe).
+  - repo: https://github.com/biomejs/pre-commit
+    rev: v2.5.0
+    hooks:
+      - id: biome-format
+        name: biome (format)
+        additional_dependencies: ['@biomejs/biome@2.5.0']
+        files: '\.(js|cjs|mjs|json)$'
+        exclude: '(^|/)(dist|node_modules)/|package(-lock)?\.json'
+
+  # --- Gate 5: secrets (gitleaks) ---
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+        name: gitleaks (secrets)
+        args: ['--config', '.gitleaks.toml']

@@ -1,0 +1,25 @@
+name: quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    # Lean 6-gate quality template (charter decided 2026-06-16).
+    # Pinned to the template branch so this PR's CI is real now; the migration
+    # runbook re-pins to a tag once the template merges to main.
+    uses: Prekzursil/quality-zero-platform/.github/workflows/reusable-quality.yml@v1
+    with:
+      # node >=22 so `node --test` honours the --test-coverage-{lines,branches,functions}
+      # threshold flags used by the `test:coverage` script (gate 3, STRICT 100%).
+      node-version: '22'
