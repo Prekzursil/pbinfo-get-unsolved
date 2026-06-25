@@ -1,7 +1,7 @@
 # Lean quality gates — local auto-fixers + fast checks.
 # `pre-commit run --all-files` is the gate-1/gate-5 entrypoint used by CI
 # (.github/workflows/quality.yml -> reusable-quality.yml). Every rev is pinned.
-minimum_pre_commit_version: "3.5.0"
+minimum_pre_commit_version: '3.5.0'
 
 exclude: |-
   (?x)^(
@@ -20,7 +20,7 @@ repos:
     hooks:
       - id: oxlint
         name: oxlint (lint --fix)
-        args: ["--config", ".oxlintrc.json", "--fix", "--deny-warnings"]
+        args: ['--config', '.oxlintrc.json', '--fix', '--deny-warnings']
         files: '\.(js|cjs|mjs)$'
         exclude: '(^|/)dist/'
 
@@ -32,7 +32,7 @@ repos:
     hooks:
       - id: biome-format
         name: biome (format)
-        additional_dependencies: ["@biomejs/biome@2.5.0"]
+        additional_dependencies: ['@biomejs/biome@2.5.0']
         files: '\.(js|cjs|mjs|json)$'
         exclude: '(^|/)(dist|node_modules)/|package(-lock)?\.json'
 
@@ -42,4 +42,4 @@ repos:
     hooks:
       - id: gitleaks
         name: gitleaks (secrets)
-        args: ["--config", ".gitleaks.toml"]
+        args: ['--config', '.gitleaks.toml']

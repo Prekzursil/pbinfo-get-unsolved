@@ -22,4 +22,4 @@ jobs:
     with:
       # node >=22 so `node --test` honours the --test-coverage-{lines,branches,functions}
       # threshold flags used by the `test:coverage` script (gate 3, STRICT 100%).
-      node-version: "22"
+      node-version: '22'
