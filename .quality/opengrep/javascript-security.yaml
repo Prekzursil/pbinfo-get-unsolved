@@ -1,0 +1,53 @@
+# Curated JS/TS security rules (subset of p/javascript + p/r2c-security-audit).
+# opengrep/semgrep compatible. See README.md.
+rules:
+  - id: js-eval-use
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Use of eval() detected. eval on untrusted input enables code injection.
+      Use a parser (e.g. JSON.parse) or explicit dispatch instead.
+    metadata:
+      category: security
+      cwe: "CWE-95"
+    patterns:
+      - pattern: eval(...)
+
+  - id: js-function-constructor
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      The Function constructor evaluates strings as code, equivalent to eval.
+      Avoid constructing functions from dynamic strings.
+    metadata:
+      category: security
+      cwe: "CWE-95"
+    patterns:
+      - pattern: new Function(...)
+
+  - id: js-document-write
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      document.write with dynamic content is an XSS sink. Build DOM nodes
+      explicitly or set textContent.
+    metadata:
+      category: security
+      cwe: "CWE-79"
+    patterns:
+      - pattern: document.write(...)
+
+  - id: js-child-process-exec
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      child_process.exec runs a shell and is prone to command injection with
+      dynamic input. Use execFile/spawn with an argument array.
+    metadata:
+      category: security
+      cwe: "CWE-78"
+    patterns:
+      - pattern-either:
+          - pattern: child_process.exec($CMD, ...)
+          - pattern: cp.exec($CMD, ...)
+      - pattern-not: child_process.exec("...", ...)
