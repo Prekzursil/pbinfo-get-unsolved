@@ -1133,7 +1133,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
 
     const style = document.createElement('style');
     style.id = UI_STYLE_ID;
-    style.innerHTML = `
+    style.textContent = `
         #${UI_ROOT_ID}{
             font-family: Arial, sans-serif;
             --bg: #ffffff;
