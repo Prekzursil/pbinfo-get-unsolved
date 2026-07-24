@@ -1198,15 +1198,21 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
     function addLog(msg) {
       const d = new Date();
       const span = document.createElement('span');
-      span.innerHTML =
-        '<b>[' +
-        d.getHours().toString().padStart(2, '0') +
-        ':' +
-        d.getMinutes().toString().padStart(2, '0') +
-        ':' +
-        d.getSeconds().toString().padStart(2, '0') +
-        '] - </b>' +
-        msg;
+      // Build the timestamp prefix with safe DOM text nodes (no markup needed),
+      // so the only HTML-rendered part is the developer-authored `msg`.
+      const stamp = document.createElement('b');
+      const hh = d.getHours().toString().padStart(2, '0');
+      const mm = d.getMinutes().toString().padStart(2, '0');
+      const ss = d.getSeconds().toString().padStart(2, '0');
+      stamp.textContent = `[${hh}:${mm}:${ss}] - `;
+      span.appendChild(stamp);
+      // `msg` is always a constant/template string assembled from trusted,
+      // code-controlled values (counts, fixed labels, internal status). No
+      // scraped page content or user input ever reaches here, so rendering it
+      // as rich-text markup (<b>, <span style=...>) is intended and safe.
+      const body = document.createElement('span');
+      body.innerHTML = msg; // NOSONAR jssecurity:S5696 - trusted developer-authored markup only
+      span.appendChild(body);
       span.style.display = 'block';
       logDiv.appendChild(span);
       if (overlayEnabled) {

@@ -7,7 +7,7 @@ import re
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 @dataclass
@@ -130,14 +130,19 @@ def _render_md(payload: dict) -> str:
 
 def _safe_output_path(raw: str, fallback: str, base: Path | None = None) -> Path:
     root = (base or Path.cwd()).resolve()
-    candidate = Path((raw or "").strip() or fallback).expanduser()
-    if not candidate.is_absolute():
-        candidate = root / candidate
-    resolved = candidate.resolve(strict=False)
+    raw_value = (raw or "").strip() or fallback
+    # Validate the *raw* string before building a Path so a user-supplied value
+    # cannot escape the workspace root (py/path-injection barrier): reject
+    # absolute paths, "~" home anchors, and ".." traversal segments up front.
+    pure = PurePosixPath(raw_value.replace("\\", "/"))
+    if pure.is_absolute() or raw_value.startswith("~") or ".." in pure.parts:
+        raise ValueError(f"Unsafe output path rejected: {raw_value!r}")
+    resolved = (root / pure).resolve(strict=False)
+    # Defense in depth: confirm the resolved path stays inside the workspace root.
     try:
         resolved.relative_to(root)
     except ValueError as exc:
-        raise ValueError(f"Output path escapes workspace root: {candidate}") from exc
+        raise ValueError(f"Output path escapes workspace root: {raw_value!r}") from exc
     return resolved
 
 

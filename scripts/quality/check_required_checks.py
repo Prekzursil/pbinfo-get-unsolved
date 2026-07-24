@@ -4,13 +4,28 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_HELPER_ROOT = _SCRIPT_DIR if (_SCRIPT_DIR / "security_helpers.py").exists() else _SCRIPT_DIR.parent
+if str(_HELPER_ROOT) not in sys.path:
+    sys.path.insert(0, str(_HELPER_ROOT))
+
+from security_helpers import normalize_https_url
+
+GITHUB_API_HOST = "api.github.com"
+# A GitHub "owner/repo" slug: each side is 1+ of [A-Za-z0-9._-], but a side may
+# not be made of dots only (rejects "." / ".." path-traversal segments).
+_SLUG_PART = r"(?!\.+/)(?!\.+$)[A-Za-z0-9._-]+"
+_REPO_SLUG_RE = re.compile(rf"^{_SLUG_PART}/{_SLUG_PART}$")
+_SHA_RE = re.compile(r"^[0-9a-fA-F]{7,64}$")
 
 
 def _parse_args() -> argparse.Namespace:
@@ -26,9 +41,17 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _api_get(repo: str, path: str, token: str) -> dict[str, Any]:
-    url = f"https://api.github.com/repos/{repo}/{path.lstrip('/')}"
+    # `repo` is validated at the CLI boundary in main(); re-validate here so this
+    # request builder is safe in isolation and cannot target an arbitrary host.
+    if not _REPO_SLUG_RE.match(repo):
+        raise ValueError(f"Refusing to build request for invalid repo slug: {repo!r}")
+    url = f"https://{GITHUB_API_HOST}/repos/{repo}/{path.lstrip('/')}"
+    # Route through the shared SSRF guard: enforces https, blocks credentials,
+    # private/loopback targets, and pins the host to api.github.com so a crafted
+    # repo/path value cannot redirect the request elsewhere (py/partial-ssrf).
+    safe_url = normalize_https_url(url, allowed_hosts={GITHUB_API_HOST})
     req = urllib.request.Request(
-        url,
+        safe_url,
         headers={
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {token}",
@@ -37,7 +60,9 @@ def _api_get(repo: str, path: str, token: str) -> dict[str, Any]:
         },
         method="GET",
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    # safe_url comes from normalize_https_url(), which raises unless the scheme is
+    # https and the host is api.github.com, so file://-style scheme abuse is impossible.
+    with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -123,14 +148,19 @@ def _render_md(payload: dict) -> str:
 
 def _safe_output_path(raw: str, fallback: str, base: Path | None = None) -> Path:
     root = (base or Path.cwd()).resolve()
-    candidate = Path((raw or "").strip() or fallback).expanduser()
-    if not candidate.is_absolute():
-        candidate = root / candidate
-    resolved = candidate.resolve(strict=False)
+    raw_value = (raw or "").strip() or fallback
+    # Validate the *raw* string before building a Path so a user-supplied value
+    # cannot escape the workspace root (py/path-injection barrier): reject
+    # absolute paths, "~" home anchors, and ".." traversal segments up front.
+    pure = PurePosixPath(raw_value.replace("\\", "/"))
+    if pure.is_absolute() or raw_value.startswith("~") or ".." in pure.parts:
+        raise ValueError(f"Unsafe output path rejected: {raw_value!r}")
+    resolved = (root / pure).resolve(strict=False)
+    # Defense in depth: confirm the resolved path stays inside the workspace root.
     try:
         resolved.relative_to(root)
     except ValueError as exc:
-        raise ValueError(f"Output path escapes workspace root: {candidate}") from exc
+        raise ValueError(f"Output path escapes workspace root: {raw_value!r}") from exc
     return resolved
 
 
@@ -143,6 +173,10 @@ def main() -> int:
         raise SystemExit("At least one --required-context is required")
     if not token:
         raise SystemExit("GITHUB_TOKEN or GH_TOKEN is required")
+    if not _REPO_SLUG_RE.match(args.repo):
+        raise SystemExit(f"--repo must be 'owner/repo' (got: {args.repo!r})")
+    if not _SHA_RE.match(args.sha):
+        raise SystemExit(f"--sha must be a hex commit SHA (got: {args.sha!r})")
 
     deadline = time.time() + max(args.timeout_seconds, 1)
 
