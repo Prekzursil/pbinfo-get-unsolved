@@ -53,9 +53,9 @@ Genuine false positives are suppressed **inline** with a greppable
 no `paths: exclude` entries hiding real hits. Current suppressions
 (`grep -rn nosemgrep`):
 
-| site | rule | why |
-|---|---|---|
-| `pbinfo-get-unsolved-enhanced.js` `addLog()` | `js-inner-html-assignment` | `addLog` is an HTML-by-design log renderer: every caller passes markup composed in this file (`<b>`, `<span style>`, `<a href>`). The one interpolated URL (`pageLink`) has already been through `normalizeListUrl` → `new URL(...).toString()`, whose WHATWG serializer percent-encodes `<`, `>` and `"`. |
+| site                                                    | rule                       | why                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pbinfo-get-unsolved-enhanced.js` `addLog()`            | `js-inner-html-assignment` | `addLog` is an HTML-by-design log renderer: every caller passes markup composed in this file (`<b>`, `<span style>`, `<a href>`). The one interpolated URL (`pageLink`) has already been through `normalizeListUrl` → `new URL(...).toString()`, whose WHATWG serializer percent-encodes `<`, `>` and `"`.                                          |
 | `pbinfo-get-unsolved-enhanced.js` sortable table header | `js-inner-html-assignment` | The value is `` `${h.label} ${sortSymbol(h.key)}` `` — `h.label` is a hard-coded column label from a literal array and `sortSymbol` returns one of three literal HTML entities (`&#9660;`/`&#9650;`/`&#9654;`). No external data reaches this sink. `textContent` is not a drop-in replacement here because the entity would then render literally. |
 
 **Known residual (NOT suppressed away, tracked separately):** because `addLog`

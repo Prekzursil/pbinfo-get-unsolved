@@ -9,7 +9,7 @@ rules:
       Use JSON.parse or an explicit dispatch table instead.
     metadata:
       category: security
-      cwe: "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code"
+      cwe: 'CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code'
     patterns:
       - pattern: eval(...)
 
@@ -21,7 +21,7 @@ rules:
       Avoid constructing functions from dynamic strings.
     metadata:
       category: security
-      cwe: "CWE-95"
+      cwe: 'CWE-95'
     patterns:
       - pattern: new Function(...)
 
@@ -33,7 +33,7 @@ rules:
       (an implicit eval). Pass a function reference instead.
     metadata:
       category: security
-      cwe: "CWE-95"
+      cwe: 'CWE-95'
     patterns:
       - pattern-either:
           - pattern: setTimeout("...", ...)
@@ -49,7 +49,7 @@ rules:
       parsing. Build DOM nodes explicitly or set textContent.
     metadata:
       category: security
-      cwe: "CWE-79: Cross-site Scripting"
+      cwe: 'CWE-79: Cross-site Scripting'
     patterns:
       - pattern-either:
           - pattern: document.write(...)
@@ -63,7 +63,7 @@ rules:
       textContent, or escape every interpolated value before it reaches HTML.
     metadata:
       category: security
-      cwe: "CWE-79"
+      cwe: 'CWE-79'
     patterns:
       - pattern: $EL.innerHTML = $X
       - pattern-not: $EL.innerHTML = "..."
@@ -76,7 +76,7 @@ rules:
       the element wholesale. Build DOM nodes explicitly.
     metadata:
       category: security
-      cwe: "CWE-79"
+      cwe: 'CWE-79'
     patterns:
       - pattern: $EL.outerHTML = $X
       - pattern-not: $EL.outerHTML = "..."
@@ -89,7 +89,7 @@ rules:
       insertAdjacentText or build DOM nodes explicitly.
     metadata:
       category: security
-      cwe: "CWE-79"
+      cwe: 'CWE-79'
     patterns:
       - pattern: $EL.insertAdjacentHTML($POS, $X)
       - pattern-not: $EL.insertAdjacentHTML($POS, "...")
@@ -102,7 +102,7 @@ rules:
       injection with dynamic input. Use execFile/spawn with an argument array.
     metadata:
       category: security
-      cwe: "CWE-78: OS Command Injection"
+      cwe: 'CWE-78: OS Command Injection'
     patterns:
       - pattern-either:
           - pattern: child_process.exec($CMD, ...)
@@ -121,7 +121,7 @@ rules:
       literal module path, or map an allowlisted key to a literal require.
     metadata:
       category: security
-      cwe: "CWE-829: Inclusion of Functionality from Untrusted Control Sphere"
+      cwe: 'CWE-829: Inclusion of Functionality from Untrusted Control Sphere'
     patterns:
       - pattern: require($X)
       - pattern-not: require("...")
@@ -134,12 +134,12 @@ rules:
       use crypto.getRandomValues or crypto.randomUUID.
     metadata:
       category: security
-      cwe: "CWE-338: Use of Cryptographically Weak PRNG"
+      cwe: 'CWE-338: Use of Cryptographically Weak PRNG'
     patterns:
       - pattern: $X = Math.random()
       - metavariable-regex:
           metavariable: $X
-          regex: "(?i).*(token|secret|key|nonce|salt|password|passwd|auth).*"
+          regex: '(?i).*(token|secret|key|nonce|salt|password|passwd|auth).*'
 
   - id: js-postmessage-star-origin
     languages: [javascript, typescript]
@@ -149,7 +149,7 @@ rules:
       can hold a reference to the window. Pass the exact expected origin.
     metadata:
       category: security
-      cwe: "CWE-346: Origin Validation Error"
+      cwe: 'CWE-346: Origin Validation Error'
     patterns:
       - pattern-either:
           - pattern: $W.postMessage($MSG, "*")
@@ -163,11 +163,11 @@ rules:
       session cookie) is interceptable; use https://.
     metadata:
       category: security
-      cwe: "CWE-319: Cleartext Transmission of Sensitive Information"
+      cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
     paths:
       exclude:
-        - "**/tests/**"
-        - "**/fixtures/**"
+        - '**/tests/**'
+        - '**/fixtures/**'
     patterns:
       - pattern-either:
           - pattern: fetch($URL, ...)

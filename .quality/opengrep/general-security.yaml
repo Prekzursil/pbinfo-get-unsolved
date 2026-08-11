@@ -9,17 +9,17 @@ rules:
       must never live in the repo; use a secret manager / env vars.
     metadata:
       category: security
-      cwe: "CWE-798: Use of Hard-coded Credentials"
+      cwe: 'CWE-798: Use of Hard-coded Credentials'
     paths:
       exclude:
-        - "*.example"
-        - ".env.example"
-        - "**/tests/**"
-        - "**/fixtures/**"
-        - ".quality/opengrep/**"
-        - ".gitleaks.toml"
+        - '*.example'
+        - '.env.example'
+        - '**/tests/**'
+        - '**/fixtures/**'
+        - '.quality/opengrep/**'
+        - '.gitleaks.toml'
     patterns:
-      - pattern-regex: "-----BEGIN (RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----"
+      - pattern-regex: '-----BEGIN (RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----'
 
   - id: generic-aws-access-key-id
     languages: [generic]
@@ -29,14 +29,14 @@ rules:
       credentials to a secret manager / environment variables.
     metadata:
       category: security
-      cwe: "CWE-798"
+      cwe: 'CWE-798'
     paths:
       exclude:
-        - "*.example"
-        - ".env.example"
-        - "**/tests/**"
-        - "**/fixtures/**"
-        - ".quality/opengrep/**"
-        - ".gitleaks.toml"
+        - '*.example'
+        - '.env.example'
+        - '**/tests/**'
+        - '**/fixtures/**'
+        - '.quality/opengrep/**'
+        - '.gitleaks.toml'
     patterns:
       - pattern-regex: "\\b(AKIA|ASIA)[0-9A-Z]{16}\\b"
