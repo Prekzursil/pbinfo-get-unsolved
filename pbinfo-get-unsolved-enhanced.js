@@ -1217,6 +1217,11 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
     function addLog(msg) {
       const d = new Date();
       const span = document.createElement('span');
+      // addLog is an HTML-by-design log renderer: every caller passes markup
+      // composed in this file. The only interpolated URL (pageLink) has been
+      // through normalizeListUrl -> new URL(...).toString(), whose WHATWG
+      // serializer percent-encodes <, > and ".
+      // nosemgrep: js-inner-html-assignment -- trusted in-file markup, see above
       span.innerHTML =
         '<b>[' +
         d.getHours().toString().padStart(2, '0') +
@@ -2339,6 +2344,11 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
         th.style.userSelect = 'none';
         const a = document.createElement('a');
         a.href = '#';
+        // h.label is a hard-coded column label from a literal array and
+        // sortSymbol() returns one of three literal HTML entities; no external
+        // data reaches this sink, and textContent would render the entity
+        // literally instead of decoding it.
+        // nosemgrep: js-inner-html-assignment -- literal label + literal entity
         a.innerHTML = `${h.label} ${sortSymbol(h.key)}`;
         a.addEventListener('click', (e) => {
           e.preventDefault();

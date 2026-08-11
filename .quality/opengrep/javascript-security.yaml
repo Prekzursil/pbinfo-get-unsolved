@@ -1,0 +1,179 @@
+# Curated JS security rules for the lean gate-4 (opengrep / Semgrep CE).
+# High-signal, browser-userscript + Node-build-script focused. See README.md.
+rules:
+  - id: js-eval-use
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Use of eval() detected. eval on untrusted input enables code injection.
+      Use JSON.parse or an explicit dispatch table instead.
+    metadata:
+      category: security
+      cwe: 'CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code'
+    patterns:
+      - pattern: eval(...)
+
+  - id: js-function-constructor
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      The Function constructor evaluates strings as code, equivalent to eval.
+      Avoid constructing functions from dynamic strings.
+    metadata:
+      category: security
+      cwe: 'CWE-95'
+    patterns:
+      - pattern: new Function(...)
+
+  - id: js-timer-string-eval
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      setTimeout/setInterval called with a STRING body evaluates it as code
+      (an implicit eval). Pass a function reference instead.
+    metadata:
+      category: security
+      cwe: 'CWE-95'
+    patterns:
+      - pattern-either:
+          - pattern: setTimeout("...", ...)
+          - pattern: setInterval("...", ...)
+          - pattern: window.setTimeout("...", ...)
+          - pattern: window.setInterval("...", ...)
+
+  - id: js-document-write
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      document.write/writeln with dynamic content is an XSS sink and blocks
+      parsing. Build DOM nodes explicitly or set textContent.
+    metadata:
+      category: security
+      cwe: 'CWE-79: Cross-site Scripting'
+    patterns:
+      - pattern-either:
+          - pattern: document.write(...)
+          - pattern: document.writeln(...)
+
+  - id: js-inner-html-assignment
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Assigning to innerHTML with non-literal data is an XSS sink. Use
+      textContent, or escape every interpolated value before it reaches HTML.
+    metadata:
+      category: security
+      cwe: 'CWE-79'
+    patterns:
+      - pattern: $EL.innerHTML = $X
+      - pattern-not: $EL.innerHTML = "..."
+
+  - id: js-outer-html-assignment
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Assigning to outerHTML with non-literal data is an XSS sink and replaces
+      the element wholesale. Build DOM nodes explicitly.
+    metadata:
+      category: security
+      cwe: 'CWE-79'
+    patterns:
+      - pattern: $EL.outerHTML = $X
+      - pattern-not: $EL.outerHTML = "..."
+
+  - id: js-insert-adjacent-html-dynamic
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      insertAdjacentHTML with non-literal markup is an XSS sink. Use
+      insertAdjacentText or build DOM nodes explicitly.
+    metadata:
+      category: security
+      cwe: 'CWE-79'
+    patterns:
+      - pattern: $EL.insertAdjacentHTML($POS, $X)
+      - pattern-not: $EL.insertAdjacentHTML($POS, "...")
+
+  - id: js-child-process-exec
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      child_process.exec/execSync runs a shell and is prone to command
+      injection with dynamic input. Use execFile/spawn with an argument array.
+    metadata:
+      category: security
+      cwe: 'CWE-78: OS Command Injection'
+    patterns:
+      - pattern-either:
+          - pattern: child_process.exec($CMD, ...)
+          - pattern: child_process.execSync($CMD, ...)
+          - pattern: cp.exec($CMD, ...)
+          - pattern: cp.execSync($CMD, ...)
+          - pattern: exec($CMD, ...)
+          - pattern: execSync($CMD, ...)
+      - pattern-not: $F("...", ...)
+
+  - id: js-dynamic-require
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      require() with a computed path can load attacker-chosen code. Require a
+      literal module path, or map an allowlisted key to a literal require.
+    metadata:
+      category: security
+      cwe: 'CWE-829: Inclusion of Functionality from Untrusted Control Sphere'
+    patterns:
+      - pattern: require($X)
+      - pattern-not: require("...")
+
+  - id: js-insecure-math-random-token
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Math.random() is not cryptographically secure. For tokens/secrets/nonces
+      use crypto.getRandomValues or crypto.randomUUID.
+    metadata:
+      category: security
+      cwe: 'CWE-338: Use of Cryptographically Weak PRNG'
+    patterns:
+      - pattern: $X = Math.random()
+      - metavariable-regex:
+          metavariable: $X
+          regex: '(?i).*(token|secret|key|nonce|salt|password|passwd|auth).*'
+
+  - id: js-postmessage-star-origin
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      postMessage with a "*" targetOrigin leaks the message to any origin that
+      can hold a reference to the window. Pass the exact expected origin.
+    metadata:
+      category: security
+      cwe: 'CWE-346: Origin Validation Error'
+    patterns:
+      - pattern-either:
+          - pattern: $W.postMessage($MSG, "*")
+          - pattern: $W.postMessage($MSG, "*", ...)
+
+  - id: js-cleartext-http-request
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Network request to a cleartext http:// URL. Traffic (including any
+      session cookie) is interceptable; use https://.
+    metadata:
+      category: security
+      cwe: 'CWE-319: Cleartext Transmission of Sensitive Information'
+    paths:
+      exclude:
+        - '**/tests/**'
+        - '**/fixtures/**'
+    patterns:
+      - pattern-either:
+          - pattern: fetch($URL, ...)
+          - pattern: $XHR.open($METHOD, $URL, ...)
+          - pattern: $F.get($URL, ...)
+          - pattern: $F.post($URL, ...)
+      - metavariable-regex:
+          metavariable: $URL
+          regex: "^[\"'`]http://(?!localhost|127\\.0\\.0\\.1)"
