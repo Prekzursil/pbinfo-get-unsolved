@@ -9,7 +9,7 @@ rules:
       Use a parser (e.g. JSON.parse) or explicit dispatch instead.
     metadata:
       category: security
-      cwe: "CWE-95"
+      cwe: 'CWE-95'
     patterns:
       - pattern: eval(...)
 
@@ -21,7 +21,7 @@ rules:
       Avoid constructing functions from dynamic strings.
     metadata:
       category: security
-      cwe: "CWE-95"
+      cwe: 'CWE-95'
     patterns:
       - pattern: new Function(...)
 
@@ -33,7 +33,7 @@ rules:
       Sanitize with a vetted sanitizer or render as text.
     metadata:
       category: security
-      cwe: "CWE-79: Cross-site Scripting"
+      cwe: 'CWE-79: Cross-site Scripting'
     patterns:
       - pattern: <$EL dangerouslySetInnerHTML={...} />
 
@@ -45,7 +45,7 @@ rules:
       explicitly or set textContent.
     metadata:
       category: security
-      cwe: "CWE-79"
+      cwe: 'CWE-79'
     patterns:
       - pattern: document.write(...)
 
@@ -57,7 +57,7 @@ rules:
       or a sanitizer.
     metadata:
       category: security
-      cwe: "CWE-79"
+      cwe: 'CWE-79'
     patterns:
       - pattern: $EL.innerHTML = $X
       - pattern-not: $EL.innerHTML = "..."
@@ -70,7 +70,7 @@ rules:
       dynamic input. Use execFile/spawn with an argument array.
     metadata:
       category: security
-      cwe: "CWE-78"
+      cwe: 'CWE-78'
     patterns:
       - pattern-either:
           - pattern: child_process.exec($CMD, ...)
@@ -85,11 +85,11 @@ rules:
       crypto.getRandomValues / crypto.randomUUID.
     metadata:
       category: security
-      cwe: "CWE-338: Use of Cryptographically Weak PRNG"
+      cwe: 'CWE-338: Use of Cryptographically Weak PRNG'
     patterns:
       - pattern: $X = Math.random()
       - pattern-inside: |
           function $F(...) { ... }
       - metavariable-regex:
           metavariable: $X
-          regex: "(?i).*(token|secret|key|nonce|salt|password).*"
+          regex: '(?i).*(token|secret|key|nonce|salt|password).*'

@@ -6,9 +6,9 @@ name: quality
 
 on:
   push:
-    branches: ["main"]
+    branches: ['main']
   pull_request:
-    branches: ["main"]
+    branches: ['main']
   # a merge queue's synthetic commit must report the required check too
   merge_group:
     types: [checks_requested]
@@ -26,5 +26,5 @@ jobs:
   quality:
     uses: Prekzursil/quality-zero-platform/.github/workflows/reusable-quality.yml@4a218e5808e881d1858ced670aadd63c12ea3497
     with:
-      node-version: "22"
+      node-version: '22'
       deps-severity-floor: any

@@ -2,6 +2,9 @@ node_modules/
 
 dist/
 
+# node --test coverage output (test:coverage writes coverage/lcov.info)
+coverage/
+
 .env
 .env.*
 
