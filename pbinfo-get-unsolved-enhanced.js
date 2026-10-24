@@ -600,6 +600,53 @@ function restoreProblemsFromSnapshot(snapshot) {
   return { allProblems, seenProblemIds };
 }
 
+// Log lines use a small, fixed formatting vocabulary: <b>, <i>, <u>,
+// <span style="color:#rrggbb;"> and <a href="http(s)://...">. appendLogMarkup
+// builds exactly those elements with createElement/createTextNode, so a log line
+// never goes through the HTML parser. Anything else that looks like markup (for
+// example inside an error message or a URL copied into a log line) is appended
+// as plain text, and a link can only ever point at an http(s) URL.
+const LOG_MARKUP_TOKEN =
+  /<(b|i|u)>|<span style="color:(#[0-9a-fA-F]{3,8});">|<a href="(https?:\/\/[^"<>\s]+)">|<\/(b|i|u|span|a)>/g;
+
+function appendLogMarkup(doc, parent, markup) {
+  const text = String(markup);
+  const open = [parent];
+  const current = () => open[open.length - 1];
+  let last = 0;
+  for (const match of text.matchAll(LOG_MARKUP_TOKEN)) {
+    if (match.index > last) {
+      current().appendChild(doc.createTextNode(text.slice(last, match.index)));
+    }
+    last = match.index + match[0].length;
+    const [token, simpleTag, color, href, closingTag] = match;
+    if (closingTag) {
+      if (open.length > 1 && current().tagName.toLowerCase() === closingTag) {
+        open.pop();
+      } else {
+        current().appendChild(doc.createTextNode(token));
+      }
+      continue;
+    }
+    let element;
+    if (simpleTag) {
+      element = doc.createElement(simpleTag);
+    } else if (color) {
+      element = doc.createElement('span');
+      element.setAttribute('style', `color:${color};`);
+    } else {
+      element = doc.createElement('a');
+      element.setAttribute('href', href);
+    }
+    current().appendChild(element);
+    open.push(element);
+  }
+  if (last < text.length) {
+    current().appendChild(doc.createTextNode(text.slice(last)));
+  }
+  return parent;
+}
+
 // Environment switch + browser-only runtime seam.
 //
 // Coverage is disabled across this whole `if/else` because every branch in it
@@ -647,6 +694,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       restoreProblemsFromSnapshot,
       isLikelyPbinfoNotFoundHtml,
       isLikelyPbinfoBlockedHtml,
+      appendLogMarkup,
     };
   }
 } else {
@@ -1217,15 +1265,17 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
     function addLog(msg) {
       const d = new Date();
       const span = document.createElement('span');
-      span.innerHTML =
-        '<b>[' +
+      const stamp = document.createElement('b');
+      stamp.textContent =
+        '[' +
         d.getHours().toString().padStart(2, '0') +
         ':' +
         d.getMinutes().toString().padStart(2, '0') +
         ':' +
         d.getSeconds().toString().padStart(2, '0') +
-        '] - </b>' +
-        msg;
+        '] - ';
+      span.appendChild(stamp);
+      appendLogMarkup(document, span, msg);
       span.style.display = 'block';
       logDiv.appendChild(span);
       if (overlayEnabled) {
@@ -2293,9 +2343,9 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
 
     function updateTable(visibleProblems) {
       function sortSymbol(t) {
-        if (sorted[t] === 1) return '&#9660;';
-        if (sorted[t] === -1) return '&#9650;';
-        return '&#9654;';
+        if (sorted[t] === 1) return '▼';
+        if (sorted[t] === -1) return '▲';
+        return '▶';
       }
       function numberToDifficulty(n) {
         return n === 0 ? 'ușoară' : n === 1 ? 'medie' : n === 2 ? 'dificilă' : 'concurs';
@@ -2339,7 +2389,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
         th.style.userSelect = 'none';
         const a = document.createElement('a');
         a.href = '#';
-        a.innerHTML = `${h.label} ${sortSymbol(h.key)}`;
+        a.textContent = `${h.label} ${sortSymbol(h.key)}`;
         a.addEventListener('click', (e) => {
           e.preventDefault();
           sortTable(h.key);
