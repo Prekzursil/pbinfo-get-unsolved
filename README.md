@@ -159,6 +159,7 @@ Pentru scanări lungi:
 ```bash
 npm ci
 npm test
+npm run test:coverage # 100% lines / branches / functions gate (also enforced in CI)
 npm run lint
 npm run format:check
 npm run build:bookmarklet

@@ -27,6 +27,9 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Test with coverage gate (100% lines / branches / functions)
+        run: npm run test:coverage
+
       - name: Lint
         run: npm run lint
 
