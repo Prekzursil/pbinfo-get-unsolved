@@ -8,14 +8,14 @@ Audit scope: full clone of `Prekzursil/pbinfo-get-unsolved` at `main` = `84b70c7
 
 All commands were run from a clean checkout (`npm ci` first). Exact commands:
 
-| Check                   | Command                                     | Result                                                                                                                         |
-| ----------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Unit tests              | `npm test` (node:test)                      | 127 tests, **127 pass / 0 fail / 0 skipped**                                                                                   |
-| Coverage gate           | `npm run test:coverage`                     | **passes** with thresholds `--test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100`              |
-| Lint                    | `npm run lint` (eslint .)                   | clean, no output                                                                                                               |
-| Format                  | `npm run format:check` (prettier --check .) | "All matched files use Prettier code style!"                                                                                   |
-| Build                   | `npm run build:bookmarklet`                 | writes `dist/pbinfo-get-unsolved.min.js`, `dist/pbinfo-get-unsolved.userscript.js`, `dist/pbinfo-get-unsolved.bookmarklet.txt` |
-| GitHub checks on `main` | `gh run list --branch main`                 | CI, quality (QZP lean gate), CodeQL: all `success` on the latest push (2026-10-24)                                             |
+| Check                   | Command                                     | Result                                                                                                                                                                                                                                       |
+| ----------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit tests              | `npm test` (node:test)                      | 127 tests, **127 pass / 0 fail / 0 skipped**                                                                                                                                                                                                 |
+| Coverage gate           | `npm run test:coverage`                     | **passes** on Node >= 22.9 (local: Node 24.16.0) with thresholds `--test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100`; **fails on Node 20** — the flags do not exist there (fixed by moving CI to Node 22) |
+| Lint                    | `npm run lint` (eslint .)                   | clean, no output                                                                                                                                                                                                                             |
+| Format                  | `npm run format:check` (prettier --check .) | "All matched files use Prettier code style!"                                                                                                                                                                                                 |
+| Build                   | `npm run build:bookmarklet`                 | writes `dist/pbinfo-get-unsolved.min.js`, `dist/pbinfo-get-unsolved.userscript.js`, `dist/pbinfo-get-unsolved.bookmarklet.txt`                                                                                                               |
+| GitHub checks on `main` | `gh run list --branch main`                 | CI, quality (QZP lean gate), CodeQL: all `success` on the latest push (2026-10-24)                                                                                                                                                           |
 
 ### Exact coverage numbers (from `coverage/lcov.info` for `pbinfo-get-unsolved-enhanced.js`)
 
@@ -32,7 +32,14 @@ suite, so it does not appear in the node:test coverage report.
    `npm test` but never `npm run test:coverage`, so the repo's own 100%
    lines/branches/functions gate was local-only. CI now runs it on every PR and
    push to `main`.
-2. **Stale, conflicting pull requests closed** (would have regressed `main` if
+2. **The coverage-gate script was broken on CI's Node version.** Wiring the
+   gate into CI exposed that `ci.yml`/`release.yml` pinned Node 20, where
+   `node --test` rejects the gate's own flags
+   (`node: bad option: --test-coverage-exclude=tests/**`,
+   `--test-coverage-lines`, `--test-coverage-branches`,
+   `--test-coverage-functions` — added in Node 22.9). Both workflows now use
+   Node 22, matching the quality workflow. (Node 20 is EOL since 2026-04-30.)
+3. **Stale, conflicting pull requests closed** (would have regressed `main` if
    merged):
    - #21 (`fix/js-yaml-quadratic-cpu-ghsa-52cp`): bumps js-yaml to 4.3.0, but
      `main` already pins **4.3.2** in `package-lock.json` (via Dependabot,
