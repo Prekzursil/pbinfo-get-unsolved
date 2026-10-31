@@ -40,18 +40,18 @@ quality-zero-platform's `reusable-quality.yml`, pinned to an exact commit.
 A finding of **any** severity fails the gate — there is no
 "high and above only" floor anywhere.
 
-| Gate | What runs | Passes when |
-| ---- | --------- | ----------- |
-| 1 · lint + format | oxlint --deny-warnings + biome format check | zero findings and zero format diffs |
-| 2 · types | n/a — no such source in this repository | zero errors **and** zero warnings |
-| 3 · tests + coverage | the `test:coverage` npm script + a coverage-number assert | every test passes at 100 % line **and** branch |
-| 4 · SAST | opengrep with the curated `.quality/opengrep` ruleset (seeded from QZP) | zero findings |
-| 5 · secrets | gitleaks | zero findings |
-| 6 · dependencies | osv-scanner on every lockfile and manifest (`osv-scanner.toml`) | zero advisories at or above the T0 floor (CVSS >= 7.0 with a published fix); the rest is listed |
+| Gate                 | What runs                                                               | Passes when                                                                                     |
+| -------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 1 · lint + format    | oxlint --deny-warnings + biome format check                             | zero findings and zero format diffs                                                             |
+| 2 · types            | n/a — no such source in this repository                                 | zero errors **and** zero warnings                                                               |
+| 3 · tests + coverage | the `test:coverage` npm script + a coverage-number assert               | every test passes at 100 % line **and** branch                                                  |
+| 4 · SAST             | opengrep with the curated `.quality/opengrep` ruleset (seeded from QZP) | zero findings                                                                                   |
+| 5 · secrets          | gitleaks                                                                | zero findings                                                                                   |
+| 6 · dependencies     | osv-scanner on every lockfile and manifest (`osv-scanner.toml`)         | zero advisories at or above the T0 floor (CVSS >= 7.0 with a published fix); the rest is listed |
 
 On top of the lean gate:
 
-- **CodeQL** — GitHub default setup with the *extended* query suite and the remote + local threat model, on every pull request and weekly; a pull request that introduces a code-scanning alert of any severity cannot be merged.
+- **CodeQL** — GitHub default setup with the _extended_ query suite and the remote + local threat model, on every pull request and weekly; a pull request that introduces a code-scanning alert of any severity cannot be merged.
 - **Dependabot** — `.github/dependabot.yml` keeps every manifest tree on a weekly update rail.
 
 ## Running the gates locally
@@ -82,7 +82,7 @@ Every new or changed line needs a test that executes it in the same change.
 Dependabot proposes updates weekly: minor and patch updates are grouped per
 ecosystem, security updates are grouped so one pull request can clear every
 open advisory, and major updates arrive one by one for review. Because the
-dependency gate fails on *any* known advisory, keep lockfiles current — an
+dependency gate fails on _any_ known advisory, keep lockfiles current — an
 unmerged security update turns every other pull request red too.
 
 ## Changing the gates (operator-only)
