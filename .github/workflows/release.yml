@@ -19,10 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           # Node 20 is EOL (2026-04-30); keep release builds on the same
           # LTS line as CI (see ci.yml).
@@ -60,10 +60,20 @@ jobs:
           INPUT_TAG: ${{ inputs.tag }}
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_TAG" ]; then
-            echo "value=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+            TAG="$INPUT_TAG"
           else
-            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            TAG="${GITHUB_REF_NAME}"
           fi
+          # Tag values flow into git refs and release names: reject anything
+          # outside [A-Za-z0-9._-] (also the defense SonarCloud S7630 asks for
+          # on top of env indirection).
+          case "$TAG" in
+            ''|*[!A-Za-z0-9._-]*)
+              echo "::error::Refusing unsafe release tag: $TAG" >&2
+              exit 1
+              ;;
+          esac
+          echo "value=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
