@@ -2070,7 +2070,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       exportStateBtn.textContent = 'Export JSON';
       exportStateBtn.addEventListener('click', () => {
         const selected = normalizeSpace(stateSelect.value);
-        let state = null;
+        let state;
         let source = 'autosave';
         if (selected.startsWith('snapshot:')) {
           const [storageVersionRaw, id] = selected.slice('snapshot:'.length).split(':');
@@ -3253,7 +3253,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
             return;
           }
 
-          let payload = null;
+          let payload;
           try {
             payload = typeof responseText === 'string' ? JSON.parse(responseText) : responseText;
           } catch {
@@ -3997,8 +3997,6 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
 
     if (pendingRestore) {
       restoreFromSavedState(pendingRestore, restoreMode);
-      pendingRestore = null;
-      restoreMode = null;
       if (!finished && !stopRequested && !paused) {
         for (let i = 0; i < getEffectiveConcurrency(); i++) schedule(kick);
       }
