@@ -1,19 +1,3 @@
-# CodeQL — fleet ADVANCED configuration (self-contained).
-#
-# Replaces the quality-zero-platform reusable-codeql.yml caller: that wrapper
-# pins queries to security-and-quality only, while the fleet standard (owner
-# decision) requires BOTH suites inline:
-#   queries: security-extended,security-and-quality
-# (security-extended + security-and-quality strictly subsumes the default
-# suite and the extended suite.) Languages per this repository: JavaScript/
-# TypeScript plus the workflows' own actions. The repo's own quality suite
-# (quality.yml) keeps running beside this analysis unchanged.
-#
-# PR-head checkout + the fail-closed `CodeQL` gate job replicate the wrapper's
-# behavior the branch-protection ruleset depends on: the code-scanning rule
-# requires a CodeQL result for the PR head SHA (uploaded on refs/pull/N/head),
-# and the required check context is `codeql / CodeQL` — a skipped analysis
-# must FAIL, not silently pass.
 name: CodeQL
 
 permissions:
@@ -23,7 +7,7 @@ permissions:
 
 on:
   push:
-    # any branch: the code-scanning rule requires head-SHA analyses
+    branches: [main, master]
   pull_request:
     branches: [main, master]
   merge_group:
@@ -33,51 +17,16 @@ on:
   workflow_dispatch:
 
 jobs:
-  analyze:
-    name: Analyze (${{ matrix.language }})
-    runs-on: ubuntu-latest
+  codeql:
     permissions:
       actions: read
       contents: read
       security-events: write
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [javascript-typescript, actions]
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          # analyze the PR head (uploads on refs/pull/N/head), like the QZP
-          # wrapper did — the code-scanning red-blocker rule expects this
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
-        with:
-          languages: ${{ matrix.language }}
-          queries: security-extended,security-and-quality
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v4
-        with:
-          category: /language:${{ matrix.language }}
-
-  # Fail-closed gate: the check fleet branch protection requires
-  # (`codeql / CodeQL`). If the analysis jobs did not all succeed, FAIL.
-  CodeQL:
-    if: always()
-    needs: [analyze]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Fail unless every analysis succeeded
-        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
-        run: |
-          echo "CodeQL analysis did not succeed"
-          echo "analyze result = ${{ toJSON(needs.analyze.result) }}"
-          exit 1
-      - name: Report success
-        run: |
-          echo "CodeQL analyses succeeded"
-          echo "analyze result = ${{ toJSON(needs.analyze.result) }}"
+    uses: Prekzursil/quality-zero-platform/.github/workflows/reusable-codeql.yml@d441b32790c4aa10e1f209539ec0ddc25114968b
+    with:
+      repo_slug: ${{ github.repository }}
+      event_name: ${{ github.event_name }}
+      sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      platform_repository: Prekzursil/quality-zero-platform
+      platform_ref: main
+      codeql_config_file: ./.github/codeql/codeql-config.yml
