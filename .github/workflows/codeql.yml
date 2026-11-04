@@ -8,6 +8,12 @@
 # suite and the extended suite.) Languages per this repository: JavaScript/
 # TypeScript plus the workflows' own actions. The repo's own quality suite
 # (quality.yml) keeps running beside this analysis unchanged.
+#
+# PR-head checkout + the fail-closed `CodeQL` gate job replicate the wrapper's
+# behavior the branch-protection ruleset depends on: the code-scanning rule
+# requires a CodeQL result for the PR head SHA (uploaded on refs/pull/N/head),
+# and the required check context is `codeql / CodeQL` — a skipped analysis
+# must FAIL, not silently pass.
 name: CodeQL
 
 permissions:
@@ -16,10 +22,8 @@ permissions:
   security-events: write
 
 on:
-  # push: any branch — the repository code-scanning rule (CodeQL red-blocker)
-  # requires an analysis for a PR head SHA, which the push event provides;
-  # pull_request runs alone only analyze the merge ref.
   push:
+    # any branch: the code-scanning rule requires head-SHA analyses
   pull_request:
     branches: [main, master]
   merge_group:
@@ -43,6 +47,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          # analyze the PR head (uploads on refs/pull/N/head), like the QZP
+          # wrapper did — the code-scanning red-blocker rule expects this
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
@@ -54,3 +63,18 @@ jobs:
         uses: github/codeql-action/analyze@v4
         with:
           category: /language:${{ matrix.language }}
+
+  # Fail-closed gate: the check fleet branch protection requires
+  # (`codeql / CodeQL`). If the analysis jobs did not all succeed, FAIL.
+  CodeQL:
+    if: always()
+    needs: [analyze]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail unless every analysis succeeded
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
+        run: |
+          echo "CodeQL analysis did not succeed: ${{ toJSON(needs.analyze.result) }}"
+          exit 1
+      - name: OK
+        run: echo "CodeQL analyses succeeded: ${{ toJSON(needs.analyze.result) }}"
