@@ -29,3 +29,4 @@ jobs:
       sha: ${{ github.event.pull_request.head.sha || github.sha }}
       platform_repository: Prekzursil/quality-zero-platform
       platform_ref: main
+      codeql_config_file: ./.github/codeql/codeql-config.yml
