@@ -1,4 +1,4 @@
-name: "pbinfo-get-unsolved CodeQL config"
+name: 'pbinfo-get-unsolved CodeQL config'
 
 # Fleet CODEQL DECISION (owner): BOTH suites must run. The QZP
 # reusable-codeql.yml wrapper pins `queries: security-and-quality` on the
