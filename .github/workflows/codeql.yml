@@ -74,7 +74,10 @@ jobs:
       - name: Fail unless every analysis succeeded
         if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
         run: |
-          echo "CodeQL analysis did not succeed: ${{ toJSON(needs.analyze.result) }}"
+          echo "CodeQL analysis did not succeed"
+          echo "analyze result = ${{ toJSON(needs.analyze.result) }}"
           exit 1
-      - name: OK
-        run: echo "CodeQL analyses succeeded: ${{ toJSON(needs.analyze.result) }}"
+      - name: Report success
+        run: |
+          echo "CodeQL analyses succeeded"
+          echo "analyze result = ${{ toJSON(needs.analyze.result) }}"
