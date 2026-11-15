@@ -23,6 +23,7 @@ Scanner pentru probleme pbinfo nerezolvate, cu focus pe workflow **userscript-fi
 3. Apasă butonul și urmează prompt-urile:
    - `1` = scanare listă (paginare)
    - `2` = scanare interval ID (`/probleme/<id>`)
+   - `3` = scanare completă (tot spațiul de ID-uri `1..plafon` auto-detectat)
 
 Implicit, userscript-ul pornește în overlay non-destructiv (nu îți golește pagina).
 
@@ -59,7 +60,7 @@ Copiază conținutul din `pbinfo-get-unsolved.bookmarklet.txt` în URL-ul unui b
 
 ## Funcționalități
 
-- Mod listă + mod interval ID.
+- Mod listă + mod interval ID + mod complet (`all`).
 - Retry cu backoff exponențial + jitter.
 - Adaptive throttling (reduce concurența/crește delay când apar blocaje).
 - Pause/Resume/Stop.
@@ -69,6 +70,49 @@ Copiază conținutul din `pbinfo-get-unsolved.bookmarklet.txt` în URL-ul unui b
 - Opțiune de virtualizare (best-effort) pentru seturi foarte mari.
 - Snapshot-uri locale multiple + import/export JSON.
 - Migrare automată stări locale v1 -> v2 (citire legacy, scriere v2).
+
+## Modul complet (`all`) — scanarea întregului spațiu de ID-uri
+
+Modul `all` răspunde la întrebarea „chiar am toate problemele?". Categoriile
+sunt utile, dar problemele ascunse, legate doar din alte pagini sau
+mis-categorizate sunt invizibile pentru inventarul pe categorii. Modul
+`all` scanează secvențial ID-urile `1..plafon` și capturăază **toate**
+problemele, indiferent de stare (rezolvate/încercate/neîncercate — starea
+rămâne marcată pe fiecare problemă, iar filtrele/tabelul/exporturile
+existente funcționează neschimbat).
+
+Cum funcționează:
+
+- **Plafon auto-detectat**: un prober secvențial sondajează în fața
+  ultimului ID viu (pas `PBINFO_GET_UNSOLVED_ALL_PROBE_STEP`). Când un
+  sondaj e mort, verifică secvențial ID-urile imediat următoare; un run de
+  `PBINFO_GET_UNSOLVED_ALL_DEAD_RUN` ID-uri moarte consecutive dovedește
+  plafonul (`provenBy: dead-run`). Peste tot, `401/403` înseamnă „există,
+  dar acces restricționat" (viu), iar `404` e singurul semnal „nu există".
+  Capul dur `PBINFO_GET_UNSOLVED_ALL_MAX_CEILING` oprește sondajul
+  (`provenBy: max-ceiling`) dacă plafonul real e dincolo de el.
+- **Clasificare distinctă per ID**: `live` (capturat), `dead` (404 — skip
+  permanent), `cookie-shell` (401/403 sau pagină 200 fără conținut de
+  problemă — skip permanent), `transient` (blocked / erori HTTP / rețea —
+  reîncercat cu backoff; după epuizarea retry-urilor intră pe skip-list cu
+  motivul). Skip-list-ul persistă în snapshot cu motiv pentru fiecare ID.
+- **Checkpoint/resume**: progresul (cursor, stare prober, skip-list,
+  ID-uri în lucru) se salvează prin mecanismul existent de snapshot-uri și
+  se reia automat. La resume, doar ID-urile `transient` sunt reîncercate.
+- **Raport de diferențe**: la finalul unei scanări complete, scriptul
+  compară ID-urile găsite cu inventarul tuturor snapshot-urilor de mod
+  listă salvate local și raportează problemele găsite DOAR de scanarea
+  completă (ascunse/fără categorie). Raportul se descarcă cu butonul
+  „Raport diferențe" din grupul Export.
+
+Configurare dedicată:
+
+```js
+window.PBINFO_GET_UNSOLVED_ALL_START = 1; // default 1 (ID-ul de start)
+window.PBINFO_GET_UNSOLVED_ALL_PROBE_STEP = 25; // default 25 (pasul sondajului de plafon)
+window.PBINFO_GET_UNSOLVED_ALL_DEAD_RUN = 10; // default 10 (ID-uri moarte consecutive care dovedesc plafonul)
+window.PBINFO_GET_UNSOLVED_ALL_MAX_CEILING = 20000; // default 20000 (capul dur al sondajului)
+```
 
 ## Config avansat
 
@@ -96,7 +140,7 @@ window.PBINFO_GET_UNSOLVED_AUTOSAVE_MS = 120000; // default 120000
 window.PBINFO_GET_UNSOLVED_SNAPSHOTS_MAX = 8; // default 8
 
 // mod scanare
-window.PBINFO_GET_UNSOLVED_MODE = 'list'; // "list" | "id-range"
+window.PBINFO_GET_UNSOLVED_MODE = 'list'; // "list" | "id-range" | "all"
 window.PBINFO_GET_UNSOLVED_MODE_PROMPT = true; // default true
 window.PBINFO_GET_UNSOLVED_ID_START = 1; // default 1
 window.PBINFO_GET_UNSOLVED_ID_END = 8000; // default 8000

@@ -430,6 +430,7 @@ function migrateStateSnapshotToV2(snapshot) {
   };
 
   if (!Array.isArray(out.problems)) out.problems = [];
+  out.allMode = normalizeAllModeSnapshotState(src.allMode);
   if (!Number.isFinite(out.resumeFromPage))
     out.resumeFromPage = computeResumeFromStateSnapshot(out);
   return out;
@@ -600,6 +601,293 @@ function restoreProblemsFromSnapshot(snapshot) {
   return { allProblems, seenProblemIds };
 }
 
+// ── Mode "all": full ID-space sweep helpers ──────────────────────────────────
+//
+// Mode "all" sweeps the whole problem ID space (1..auto-detected ceiling) and
+// captures every live problem regardless of solved state. The ceiling is
+// proven by probing past the last live ID until a configurable run of
+// consecutive dead IDs (or the hard cap) is hit. Everything below is pure so
+// the whole decision core is unit-testable at strict 100% line+branch.
+
+function normalizeScanMode(value) {
+  const v = normalizeForMatch(value || '');
+  if (v === '1') return 'list';
+  if (v === '2') return 'id-range';
+  if (v === '3') return 'all';
+  if (v.includes('all') || v.includes('tot') || v.includes('complet')) return 'all';
+  if (v.includes('id') || v.includes('range') || v.includes('index')) return 'id-range';
+  if (v.includes('list')) return 'list';
+  return null;
+}
+
+function resolveAllModeConfig(w) {
+  const src = w && typeof w === 'object' ? w : {};
+  const positiveIntOr = (v, d) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.max(1, Math.trunc(n)) : d;
+  };
+  return {
+    startId: positiveIntOr(src.PBINFO_GET_UNSOLVED_ALL_START, 1),
+    probeStep: positiveIntOr(src.PBINFO_GET_UNSOLVED_ALL_PROBE_STEP, 25),
+    deadRun: positiveIntOr(src.PBINFO_GET_UNSOLVED_ALL_DEAD_RUN, 10),
+    maxCeiling: positiveIntOr(src.PBINFO_GET_UNSOLVED_ALL_MAX_CEILING, 20000),
+  };
+}
+
+function createAllModeProber(options) {
+  const o = options && typeof options === 'object' ? options : {};
+  const cfg = resolveAllModeConfig({
+    PBINFO_GET_UNSOLVED_ALL_START: o.startId,
+    PBINFO_GET_UNSOLVED_ALL_PROBE_STEP: o.probeStep,
+    PBINFO_GET_UNSOLVED_ALL_DEAD_RUN: o.deadRun,
+    PBINFO_GET_UNSOLVED_ALL_MAX_CEILING: o.maxCeiling,
+  });
+  return {
+    phase: 'probe',
+    lastLive: cfg.startId - 1,
+    probeStep: cfg.probeStep,
+    deadRun: cfg.deadRun,
+    maxCeiling: cfg.maxCeiling,
+    deadStreak: 0,
+    done: false,
+    ceiling: null,
+    provenBy: null,
+  };
+}
+
+// Next ID the prober wants fetched, or null when the prober is finished or
+// its state is unusable. Never mutates state.
+function peekAllModeProbeId(state) {
+  if (!state || typeof state !== 'object' || state.done) return null;
+  const base =
+    state.phase === 'tail'
+      ? state.lastLive + 1 + state.deadStreak
+      : state.lastLive + state.probeStep;
+  const n = Number(base);
+  if (!Number.isFinite(n)) return null;
+  const id = Math.trunc(n);
+  return id >= 1 ? id : null;
+}
+
+// Fold one probe (or sweep) outcome into the prober state. `outcome` is
+// 'live' or 'dead'. Ids at or below lastLive are stale no-ops, so concurrent
+// sweep results can safely feed the same function. A dead result only counts
+// toward the proving streak when it is exactly the next contiguous ID after
+// lastLive; any other dead just restarts the tail phase (honest ceiling).
+function applyAllModeProbeOutcome(state, id, outcome) {
+  if (!state || state.done) return state;
+  const n = Math.trunc(Number(id));
+  if (!Number.isFinite(n) || n <= state.lastLive) return state;
+  if (outcome === 'live') {
+    return { ...state, phase: 'probe', lastLive: n, deadStreak: 0 };
+  }
+  const expectedTail = state.lastLive + 1 + state.deadStreak;
+  if (state.phase === 'probe' || n !== expectedTail) {
+    return { ...state, phase: 'tail', deadStreak: 0 };
+  }
+  const deadStreak = state.deadStreak + 1;
+  if (deadStreak >= state.deadRun) {
+    return { ...state, done: true, ceiling: state.lastLive, provenBy: 'dead-run', deadStreak };
+  }
+  return { ...state, deadStreak };
+}
+
+function finishAllModeProber(state, ceiling, provenBy) {
+  const c = Math.trunc(Number(ceiling));
+  return {
+    ...state,
+    done: true,
+    ceiling: Number.isFinite(c) ? Math.max(1, c) : null,
+    provenBy: provenBy ? String(provenBy) : null,
+  };
+}
+
+function normalizeAllModeProberState(raw) {
+  if (!raw || typeof raw !== 'object') return createAllModeProber({});
+  const lastLiveRaw = Number(raw.lastLive);
+  const base = createAllModeProber({
+    startId: Number.isFinite(lastLiveRaw) ? Math.max(1, Math.trunc(lastLiveRaw) + 1) : 1,
+    probeStep: raw.probeStep,
+    deadRun: raw.deadRun,
+    maxCeiling: raw.maxCeiling,
+  });
+  const deadStreakRaw = Number(raw.deadStreak);
+  const ceilingRaw = Number(raw.ceiling);
+  return {
+    ...base,
+    phase: raw.phase === 'tail' ? 'tail' : 'probe',
+    lastLive: Number.isFinite(lastLiveRaw) ? Math.max(0, Math.trunc(lastLiveRaw)) : 0,
+    deadStreak: Number.isFinite(deadStreakRaw) ? Math.max(0, Math.trunc(deadStreakRaw)) : 0,
+    done: raw.done === true,
+    ceiling: Number.isFinite(ceilingRaw) ? Math.trunc(ceilingRaw) : null,
+    provenBy: typeof raw.provenBy === 'string' && raw.provenBy ? raw.provenBy : null,
+  };
+}
+
+// Next sweep target for a candidate ID, or null once the (possibly null)
+// ceiling is exhausted. The caller supplies the smallest interesting ID.
+function nextAllModeSweepTarget(cursor, ceiling) {
+  const c = Math.trunc(Number(cursor));
+  if (!Number.isFinite(c) || c < 1) return null;
+  const ceilRaw = Number(ceiling);
+  if (ceiling != null && Number.isFinite(ceilRaw) && c > Math.trunc(ceilRaw)) return null;
+  return c;
+}
+
+// Distinct classification for every settled ID fetch in mode "all".
+//   live         -> capture the problem
+//   dead         -> skip-list (permanent; never retried)
+//   cookie-shell -> skip-list (auth/access-restricted shell; never retried)
+//   transient    -> retried by the caller; on exhaustion recorded as skipped
+function classifyAllModeFetchOutcome({ status, blocked, notFound, hasProblemShell } = {}) {
+  if (blocked) return { kind: 'transient', reason: 'blocked' };
+  const s = Number.isFinite(Number(status)) ? Number(status) : 0;
+  if (s === 404 || notFound) return { kind: 'dead', reason: 'not-found' };
+  if (s === 401 || s === 403) return { kind: 'cookie-shell', reason: 'forbidden' };
+  if (s !== 200) return { kind: 'transient', reason: `http-${s}` };
+  if (!hasProblemShell) return { kind: 'cookie-shell', reason: 'no-problem-shell' };
+  return { kind: 'live', reason: null };
+}
+
+const ALL_MODE_SKIP_KINDS = new Set(['dead', 'cookie-shell', 'transient']);
+
+function normalizeAllModeSkipList(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const e of raw) {
+    const id = Math.trunc(Number(e?.id));
+    if (!Number.isFinite(id) || id < 1) continue;
+    if (!ALL_MODE_SKIP_KINDS.has(e?.kind)) continue;
+    const attemptsRaw = Math.trunc(Number(e?.attempts));
+    out.push({
+      id,
+      kind: e.kind,
+      reason: typeof e?.reason === 'string' ? e.reason : '',
+      attempts: Number.isFinite(attemptsRaw) ? Math.max(0, attemptsRaw) : 0,
+    });
+  }
+  out.sort((a, b) => a.id - b.id);
+  return out;
+}
+
+// Only non-transient skip entries permanently suppress an ID; transient
+// entries exist for reporting but their IDs are retried (on resume).
+function isAllModeSkipEntry(entry) {
+  return Boolean(entry && typeof entry === 'object') && entry.kind !== 'transient';
+}
+
+function computeAllModeDiff(sweepIds, categoryIds) {
+  const toIdSet = (list) =>
+    new Set(
+      (Array.isArray(list) ? list : [])
+        .map((x) => Math.trunc(Number(x)))
+        .filter((x) => Number.isFinite(x) && x >= 1)
+    );
+  const sweep = toIdSet(sweepIds);
+  const category = toIdSet(categoryIds);
+  const hiddenIds = Array.from(sweep)
+    .filter((id) => !category.has(id))
+    .sort((a, b) => a - b);
+  const missingFromSweepIds = Array.from(category)
+    .filter((id) => !sweep.has(id))
+    .sort((a, b) => a - b);
+  const sweepSorted = Array.from(sweep).sort((a, b) => a - b);
+  return {
+    sweepStartId: sweepSorted.length > 0 ? sweepSorted[0] : null,
+    sweepTotal: sweep.size,
+    categoryTotal: category.size,
+    hiddenIds,
+    missingFromSweepIds,
+    hiddenCount: hiddenIds.length,
+    missingFromSweepCount: missingFromSweepIds.length,
+  };
+}
+
+const ALL_MODE_DIFF_MAX_LISTED = 200;
+
+function formatAllModeDiffReport(diff) {
+  const d = diff && typeof diff === 'object' ? diff : {};
+  const hiddenIds = Array.isArray(d.hiddenIds) ? d.hiddenIds : [];
+  const missingIds = Array.isArray(d.missingFromSweepIds) ? d.missingFromSweepIds : [];
+  const num = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.trunc(Number(v))) : 0);
+  const startNote =
+    Number.isFinite(Number(d.sweepStartId)) && d.sweepStartId > 1
+      ? `Scanarea completă a început de la ID ${d.sweepStartId} (nu de la 1); ID-urile mai mici pot apărea artificial ca lipsă.\n`
+      : '';
+  const fmt = (ids) => {
+    if (ids.length === 0) return '(niciunul)';
+    const shown = ids.slice(0, ALL_MODE_DIFF_MAX_LISTED).join(', ');
+    return ids.length > ALL_MODE_DIFF_MAX_LISTED
+      ? `${shown} … (+${ids.length - ALL_MODE_DIFF_MAX_LISTED} altele)`
+      : shown;
+  };
+  return (
+    'Raport diferențe: scanare completă (ID sweep) vs. inventar categorii (mod listă)\n' +
+    startNote +
+    `Total scanare completă: ${num(d.sweepTotal)} · total inventar categorii: ${num(d.categoryTotal)}\n` +
+    `Probleme găsite DOAR de scanarea completă (ascunse/fără categorie): ${hiddenIds.length}\n` +
+    `  IDs: ${fmt(hiddenIds)}\n` +
+    `Probleme din inventar lipsă din scanarea completă: ${missingIds.length}\n` +
+    `  IDs: ${fmt(missingIds)}\n`
+  );
+}
+
+// Union of problem IDs from every saved "list"-mode snapshot (the category
+// inventory used as the diff baseline).
+function collectAllModeCategoryIds(states) {
+  const ids = new Set();
+  for (const state of Array.isArray(states) ? states : []) {
+    if (!state || typeof state !== 'object') continue;
+    if (state.scanMode !== 'list') continue;
+    const problems = Array.isArray(state.problems) ? state.problems : [];
+    for (const p of problems) {
+      const id = Math.trunc(Number(p?.id));
+      if (Number.isFinite(id) && id >= 1) ids.add(id);
+    }
+  }
+  return Array.from(ids).sort((a, b) => a - b);
+}
+
+function normalizeAllModeDiffState(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const ids = (list) =>
+    (Array.isArray(list) ? list : [])
+      .map((x) => Math.trunc(Number(x)))
+      .filter((x) => Number.isFinite(x) && x >= 1)
+      .sort((a, b) => a - b);
+  const hiddenIds = ids(raw.hiddenIds);
+  const missingFromSweepIds = ids(raw.missingFromSweepIds);
+  const num = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.trunc(Number(v))) : 0);
+  const startRaw = Number(raw.sweepStartId);
+  return {
+    sweepStartId: Number.isFinite(startRaw) ? Math.trunc(startRaw) : null,
+    sweepTotal: num(raw.sweepTotal),
+    categoryTotal: num(raw.categoryTotal),
+    hiddenIds,
+    missingFromSweepIds,
+    hiddenCount: hiddenIds.length,
+    missingFromSweepCount: missingFromSweepIds.length,
+  };
+}
+
+function normalizeAllModeSnapshotState(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const ceilingRaw = Number(raw.ceiling);
+  const cursorRaw = Number(raw.sweepCursor);
+  return {
+    ceiling: Number.isFinite(ceilingRaw) ? Math.max(1, Math.trunc(ceilingRaw)) : null,
+    prober: normalizeAllModeProberState(raw.prober),
+    sweepCursor: Number.isFinite(cursorRaw) ? Math.max(1, Math.trunc(cursorRaw)) : 1,
+    pendingSweepIds: Array.isArray(raw.pendingSweepIds)
+      ? raw.pendingSweepIds
+          .map((x) => Math.trunc(Number(x)))
+          .filter((x) => Number.isFinite(x) && x >= 1)
+      : [],
+    skipList: normalizeAllModeSkipList(raw.skipList),
+    diff: normalizeAllModeDiffState(raw.diff),
+  };
+}
+
 // Log lines use a small, fixed formatting vocabulary: <b>, <i>, <u>,
 // <span style="color:#rrggbb;"> and <a href="http(s)://...">. appendLogMarkup
 // builds exactly those elements with createElement/createTextNode, so a log line
@@ -695,6 +983,22 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       isLikelyPbinfoNotFoundHtml,
       isLikelyPbinfoBlockedHtml,
       appendLogMarkup,
+      normalizeScanMode,
+      resolveAllModeConfig,
+      createAllModeProber,
+      peekAllModeProbeId,
+      applyAllModeProbeOutcome,
+      finishAllModeProber,
+      normalizeAllModeProberState,
+      nextAllModeSweepTarget,
+      classifyAllModeFetchOutcome,
+      normalizeAllModeSkipList,
+      isAllModeSkipEntry,
+      computeAllModeDiff,
+      formatAllModeDiffReport,
+      collectAllModeCategoryIds,
+      normalizeAllModeDiffState,
+      normalizeAllModeSnapshotState,
     };
   }
 } else {
@@ -834,6 +1138,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           ),
         },
       },
+      allMode: resolveAllModeConfig(window),
       pagination: {
         mode: window.PBINFO_GET_UNSOLVED_PAGINATION_MODE || 'offset',
         param: window.PBINFO_GET_UNSOLVED_PAGE_PARAM || 'start',
@@ -957,27 +1262,18 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       Object.assign(adaptiveThrottleState, next);
     }
 
-    function normalizeScanMode(value) {
-      const v = normalizeForMatch(value || '');
-      if (v === '1') return 'list';
-      if (v === '2') return 'id-range';
-      if (v.includes('id')) return 'id-range';
-      if (v.includes('range')) return 'id-range';
-      if (v.includes('index')) return 'id-range';
-      if (v.includes('list')) return 'list';
-      return null;
-    }
-
     const defaultLink = location?.href || '';
     const modeFromWindow = normalizeScanMode(window.PBINFO_GET_UNSOLVED_MODE);
     let scanMode = modeFromWindow;
     const modePromptDisabled = window.PBINFO_GET_UNSOLVED_MODE_PROMPT === false;
     if (!modePromptDisabled) {
-      const defaultModePromptValue = modeFromWindow === 'id-range' ? '2' : '1';
+      const defaultModePromptValue =
+        modeFromWindow === 'id-range' ? '2' : modeFromWindow === 'all' ? '3' : '1';
       let modeInput = prompt(
         'Mod scanare:\n' +
           '1 = listă (paginare)\n' +
           '2 = interval ID (probleme/ID)\n' +
+          '3 = complet (toate ID-urile 1..plafon auto-detectat)\n' +
           `Enter = ${defaultModePromptValue}`,
         defaultModePromptValue
       );
@@ -1034,6 +1330,13 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       config.idRange.endId = endId;
       pageLink = `id-range:${location?.origin || 'https://www.pbinfo.ro'}:${startId}-${endId}`;
       config.startPage = startId;
+    } else if (scanMode === 'all') {
+      pageLink = `all:${location?.origin || 'https://www.pbinfo.ro'}`;
+      config.startPage = Math.max(config.startPage, config.allMode.startId);
+      // Score batches are an id-range-only optimization; mode "all" always
+      // fetches the problem page so metadata is captured for every problem.
+      config.idRange.startId = config.allMode.startId;
+      config.idRange.endId = config.allMode.maxCeiling;
     } else {
       let pageLinkInput = prompt(
         'Pune un link către lista de probleme de unde vrei să obții problemele nerezolvate.\n' +
@@ -1079,11 +1382,13 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           : null;
       const kind = savedFull ? 'full' : 'minimal';
       const note = kind === 'minimal' ? ' (doar progres, fără lista completă)' : '';
-      const unitLabel = scanMode === 'id-range' ? 'ID-uri scanate' : 'Pagini scanate';
+      const unitLabel = scanMode === 'list' ? 'Pagini scanate' : 'ID-uri scanate';
       const headLine =
         scanMode === 'id-range'
           ? `Am găsit un scan salvat pentru acest interval${note}.\n`
-          : `Am găsit un scan salvat pentru acest link${note}.\n`;
+          : scanMode === 'all'
+            ? `Am găsit un scan salvat pentru scanarea completă${note}.\n`
+            : `Am găsit un scan salvat pentru acest link${note}.\n`;
       const ok = confirm(
         headLine +
           `Salvat la: ${savedAt}\n` +
@@ -1113,9 +1418,14 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
             `Interval: ${config.idRange.startId}-${config.idRange.endId}\n` +
             'Pentru resume, pune un număr mai mare.\n' +
             'Enter = valoarea default.'
-          : 'De la ce pagină să încep scanarea?\n' +
-            '1 = de la început. Pentru resume, pune un număr mai mare.\n' +
-            'Enter = valoarea default.';
+          : scanMode === 'all'
+            ? 'De la ce ID să încep scanarea completă?\n' +
+              'Plafonul superior este detectat automat.\n' +
+              'Pentru resume, pune un număr mai mare.\n' +
+              'Enter = valoarea default.'
+            : 'De la ce pagină să încep scanarea?\n' +
+              '1 = de la început. Pentru resume, pune un număr mai mare.\n' +
+              'Enter = valoarea default.';
       let startPageInput = prompt(promptText, String(config.startPage));
       if (startPageInput === null) {
         console.warn('Nu a fost furnizat start. Scriptul a fost oprit.');
@@ -1129,6 +1439,10 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       }
       if (scanMode === 'id-range' && startPage > config.idRange.endId) {
         console.warn('Start ID peste capătul intervalului. Scriptul a fost oprit.');
+        return;
+      }
+      if (scanMode === 'all' && startPage > config.allMode.maxCeiling) {
+        console.warn('Start ID peste plafonul maxim configurat. Scriptul a fost oprit.');
         return;
       }
       config.startPage = startPage;
@@ -1290,6 +1604,11 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
         `Mod scanare: <b>interval ID</b> (${config.idRange.startId}-${config.idRange.endId}).`
       );
       addLog(`Start ID: <b>${config.startPage}</b>.`);
+    } else if (scanMode === 'all') {
+      addLog(
+        `Mod scanare: <b>complet</b> (spațiu ID ${config.startPage}..plafon auto · pas probe=${config.allMode.probeStep} · deadRun=${config.allMode.deadRun} · cap=${config.allMode.maxCeiling}).`
+      );
+      addLog(`Start ID: <b>${config.startPage}</b>.`);
     } else {
       addLog(
         'Link către lista de probleme: <a href="' + pageLink + '"><i>' + pageLink + '</i></a>'
@@ -1323,6 +1642,239 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       missing: 0,
       forbidden: 0,
     };
+    // ── Mode "all" runtime: full ID-space sweep with auto-detected ceiling ──
+    let allModeCeiling = null;
+    let allModeCursor = Number.isFinite(config.startPage) ? Math.max(1, config.startPage) : 1;
+    let allModeProber = null;
+    let allModeDiff = null;
+    let allModeProbeInFlight = 0;
+    const allModeDispatched = new Set();
+    const allModePending = new Set();
+    const allModeRetryTimers = new Map();
+    const allModeSkipMap = new Map();
+    if (scanMode === 'all') {
+      allModeProber = createAllModeProber({
+        startId: config.startPage,
+        probeStep: config.allMode.probeStep,
+        deadRun: config.allMode.deadRun,
+        maxCeiling: config.allMode.maxCeiling,
+      });
+    }
+
+    function allModeSkipCounts() {
+      let dead = 0;
+      let cookieShell = 0;
+      let transient = 0;
+      for (const e of allModeSkipMap.values()) {
+        if (e.kind === 'dead') dead++;
+        else if (e.kind === 'cookie-shell') cookieShell++;
+        else transient++;
+      }
+      return { dead, cookieShell, transient };
+    }
+
+    function allModeRecordSkip(id, kind, reason) {
+      allModeSkipMap.set(id, { id, kind, reason, attempts: config.maxRetriesPerPage + 1 });
+    }
+
+    function allModeSweepBound() {
+      if (allModeCeiling != null) return allModeCeiling;
+      return config.allMode.maxCeiling;
+    }
+
+    function nextAllModeSweepId() {
+      const bound = allModeSweepBound();
+      let id = allModeCursor;
+      while (id <= bound) {
+        if (!allModeDispatched.has(id)) {
+          if (isAllModeSkipEntry(allModeSkipMap.get(id))) {
+            // Permanently skipped on a previous run (dead / cookie-shell):
+            // never refetch, never retry.
+            allModeDispatched.add(id);
+            id++;
+            continue;
+          }
+          return nextAllModeSweepTarget(id, allModeCeiling);
+        }
+        id++;
+      }
+      return null;
+    }
+
+    function allModeSettleSweep(id) {
+      allModePending.delete(id);
+      while (allModeDispatched.has(allModeCursor) && !allModePending.has(allModeCursor)) {
+        allModeCursor++;
+      }
+    }
+
+    function allModeDeferRetry(pageIndex, retryCount, delayMs) {
+      const existing = allModeRetryTimers.get(pageIndex);
+      if (existing) clearTimeout(existing);
+      const handle = setTimeout(() => {
+        allModeRetryTimers.delete(pageIndex);
+        fetchPage(pageIndex, retryCount + 1);
+      }, delayMs);
+      allModeRetryTimers.set(pageIndex, handle);
+    }
+
+    function allModeSyncCeiling() {
+      if (allModeProber?.done && allModeCeiling == null && Number.isFinite(allModeProber.ceiling)) {
+        allModeCeiling = allModeProber.ceiling;
+        addLog(
+          `Plafon detectat: <b>${allModeCeiling}</b> (dovedit prin ${allModeProber.provenBy}).`
+        );
+      }
+    }
+
+    function allModeProbeSettled() {
+      allModeProbeInFlight = Math.max(0, allModeProbeInFlight - 1);
+      allModeSyncCeiling();
+      schedule(kick);
+    }
+
+    function fetchAllModeProbe(id, retryCount = 0) {
+      if (finished || stopRequested || restoringState) {
+        allModeProbeSettled();
+        return;
+      }
+      if (paused) {
+        setTimeout(() => fetchAllModeProbe(id, retryCount), 500);
+        return;
+      }
+      const controller = new AbortController();
+      activeRequests.add(controller);
+      let timeoutTriggered = false;
+      const timeoutId = setTimeout(() => {
+        timeoutTriggered = true;
+        controller.abort();
+      }, config.timeoutMs);
+      let finalized = false;
+      const finalize = () => {
+        if (finalized) return;
+        finalized = true;
+        clearTimeout(timeoutId);
+        activeRequests.delete(controller);
+      };
+      const url = new URL(
+        `/probleme/${id}`,
+        location?.origin || 'https://www.pbinfo.ro'
+      ).toString();
+      const settleProbe = (outcome) => {
+        finalize();
+        allModeProber = applyAllModeProbeOutcome(allModeProber, id, outcome);
+        noteAdaptiveSuccess();
+        allModeProbeSettled();
+      };
+      const giveUpProbe = (reason) => {
+        allModeRecordSkip(id, 'transient', reason);
+        settleProbe('dead');
+      };
+      fetch(url, { method: 'GET', signal: controller.signal, credentials: 'include' })
+        .then(async (res) => {
+          const responseText = await res.text();
+          if (stopRequested || finished || restoringState) {
+            finalize();
+            allModeProbeSettled();
+            return;
+          }
+          if (isLikelyPbinfoBlockedHtml(responseText)) {
+            noteAdaptiveFailure('blocked');
+            if (retryCount < maxRetriesPerPage) {
+              const delay = getRetryDelayMs(retryCount);
+              finalize();
+              setTimeout(() => fetchAllModeProbe(id, retryCount + 1), delay);
+              return;
+            }
+            giveUpProbe('probe-blocked');
+            return;
+          }
+          // 401/403 mean the problem exists but is access-restricted: live
+          // for ceiling purposes (404 is the only "does not exist" signal).
+          if (res.status === 200 || res.status === 401 || res.status === 403) {
+            settleProbe('live');
+            return;
+          }
+          if (res.status === 404 || isLikelyPbinfoNotFoundHtml(responseText)) {
+            settleProbe('dead');
+            return;
+          }
+          noteAdaptiveFailure('http');
+          if (retryCount < maxRetriesPerPage) {
+            const delay = getRetryDelayMs(retryCount);
+            finalize();
+            setTimeout(() => fetchAllModeProbe(id, retryCount + 1), delay);
+            return;
+          }
+          giveUpProbe(`probe-http-${res.status}`);
+        })
+        .catch((err) => {
+          finalize();
+          if (stopRequested || finished || restoringState) {
+            allModeProbeSettled();
+            return;
+          }
+          if (err?.name === 'AbortError' && !timeoutTriggered) {
+            allModeProbeSettled();
+            return;
+          }
+          noteAdaptiveFailure('network');
+          if (retryCount < maxRetriesPerPage) {
+            const delay = getRetryDelayMs(retryCount);
+            setTimeout(() => fetchAllModeProbe(id, retryCount + 1), delay);
+            return;
+          }
+          giveUpProbe(timeoutTriggered ? 'probe-timeout' : 'probe-network');
+        });
+    }
+
+    function allModeKick() {
+      if (finished || paused) return;
+
+      // Probe lane: strictly sequential (the next probe depends on the
+      // previous outcome).
+      if (allModeProber && !allModeProber.done && allModeProbeInFlight === 0) {
+        const pid = peekAllModeProbeId(allModeProber);
+        if (pid == null || pid > allModeProber.maxCeiling) {
+          allModeProber = finishAllModeProber(
+            allModeProber,
+            allModeProber.maxCeiling,
+            'max-ceiling'
+          );
+          allModeSyncCeiling();
+        } else {
+          allModeProbeInFlight++;
+          schedule(() => fetchAllModeProbe(pid, 0));
+        }
+      }
+
+      // Sweep lane: first re-drive pending IDs (e.g. retries paused mid-run),
+      // then dispatch fresh targets.
+      for (const id of Array.from(allModePending)) {
+        if (inFlight >= getEffectiveConcurrency()) break;
+        if (activePageIndexes.has(id) || allModeRetryTimers.has(id)) continue;
+        fetchPage(id, 0);
+      }
+      while (inFlight < getEffectiveConcurrency()) {
+        const id = nextAllModeSweepId();
+        if (id == null) break;
+        allModeDispatched.add(id);
+        allModePending.add(id);
+        fetchPage(id, 0);
+      }
+
+      if (
+        !finished &&
+        allModeProber?.done &&
+        nextAllModeSweepId() == null &&
+        allModePending.size === 0 &&
+        allModeProbeInFlight === 0 &&
+        deferredPageRequests.size === 0 &&
+        inFlight === 0
+      ) {
+        finishScan({ complete: true });
+      }
+    }
     let finished = false;
     let scanEnd = null;
     let restoringState = false;
@@ -1552,7 +2104,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       summaryDiv.appendChild(b);
       summaryDiv.appendChild(
         document.createTextNode(
-          ` scanate=${total} · nerezolvate=${unsolved} · afișate=${shown} · ${scanMode === 'id-range' ? 'ID-uri' : 'pagini'}=${stats.pages}`
+          ` scanate=${total} · nerezolvate=${unsolved} · afișate=${shown} · ${scanMode === 'list' ? 'pagini' : 'ID-uri'}=${stats.pages}`
         )
       );
     }
@@ -1970,6 +2522,23 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       });
       groupExport.appendChild(copyMarkdown);
 
+      if (scanMode === 'all') {
+        const exportDiff = document.createElement('button');
+        exportDiff.textContent = 'Raport diferențe';
+        exportDiff.addEventListener('click', () => {
+          if (!allModeDiff) {
+            addLog('Raportul de diferențe este disponibil după terminarea unei scanări complete.');
+            return;
+          }
+          downloadText(
+            'pbinfo-all-mode-diff.txt',
+            formatAllModeDiffReport(allModeDiff),
+            'text/plain;charset=utf-8'
+          );
+        });
+        groupExport.appendChild(exportDiff);
+      }
+
       const groupSession = document.createElement('div');
       groupSession.className = 'group';
       groupSession.innerHTML = '<b>Stare (local)</b>';
@@ -2255,7 +2824,9 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       scanNote.textContent =
         scanMode === 'id-range'
           ? `resume: start ID > ${config.idRange.startId} (curent ${config.startPage}) · interval=${config.idRange.startId}-${config.idRange.endId}`
-          : `resume: start page > 1 (curent ${config.startPage}) · maxPages=${config.maxPages}`;
+          : scanMode === 'all'
+            ? `resume: start ID > ${config.startPage} · plafon auto (deadRun=${config.allMode.deadRun}, pas=${config.allMode.probeStep}, cap=${config.allMode.maxCeiling})`
+            : `resume: start page > 1 (curent ${config.startPage}) · maxPages=${config.maxPages}`;
       groupScan.appendChild(scanNote);
 
       controlsDiv.replaceChildren(
@@ -2302,6 +2873,29 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
         const missingText = stats.missing > 0 ? ` · 404 ${stats.missing}` : '';
         const forbiddenText = stats.forbidden > 0 ? ` · 403 ${stats.forbidden}` : '';
         progressDiv.textContent = `Progres: ID-uri ${idsText}, probleme ${stats.total} (găsite)${missingText} · timp ${formatDuration(
+          elapsedMs
+        )}${etaText}${adaptiveText}${pauseText}${inflightText}${startText}${forbiddenText}`;
+        return;
+      }
+
+      if (scanMode === 'all') {
+        const done = stats.pages;
+        const bound = allModeSweepBound();
+        const totalIds = bound != null ? Math.max(0, bound - scanStart + 1) : null;
+        const idsText = totalIds != null && totalIds > 0 ? `${done}/${totalIds}` : `${done}`;
+        const ceilingText =
+          allModeCeiling != null ? `${allModeCeiling}` : `în detectare (cap ${bound})`;
+        const speed = elapsedMs > 0 ? done / (elapsedMs / 1000) : 0;
+        const etaMs =
+          allModeCeiling != null && totalIds != null && totalIds > 0 && speed > 0
+            ? ((totalIds - done) / speed) * 1000
+            : null;
+        const etaText = etaMs != null ? ` · ETA ~${formatDuration(etaMs)}` : '';
+        const skip = allModeSkipCounts();
+        const skipText = ` · skip: dead=${skip.dead} cookie=${skip.cookieShell} transient=${skip.transient}`;
+        const missingText = stats.missing > 0 ? ` · 404 ${stats.missing}` : '';
+        const forbiddenText = stats.forbidden > 0 ? ` · 403 ${stats.forbidden}` : '';
+        progressDiv.textContent = `Progres: ID-uri ${idsText} (plafon ${ceilingText}), probleme ${stats.total} (găsite)${missingText}${skipText} · timp ${formatDuration(
           elapsedMs
         )}${etaText}${adaptiveText}${pauseText}${inflightText}${startText}${forbiddenText}`;
         return;
@@ -2511,6 +3105,19 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       renderChunk();
     }
 
+    function gatherListSnapshotsForDiff() {
+      const states = [];
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (!key || !key.startsWith(`${STORAGE_NAMESPACE}:`)) continue;
+          const migrated = migrateStateSnapshotToV2(storageGetJson(key));
+          if (migrated && migrated.scanMode === 'list') states.push(migrated);
+        }
+      } catch {}
+      return states;
+    }
+
     function finishScan({ complete, reason }) {
       if (finished) return;
       scanEnd = {
@@ -2526,7 +3133,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       ensureResultsAttached();
       renderResults();
 
-      const unitLabel = scanMode === 'id-range' ? 'ID-uri' : 'pagini';
+      const unitLabel = scanMode === 'list' ? 'pagini' : 'ID-uri';
       const idRangeSuffixParts =
         scanMode === 'id-range'
           ? [
@@ -2541,6 +3148,20 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
 
       const unsolvedCount = allProblems.filter((p) => p.status !== 'solved').length;
       if (complete) {
+        if (scanMode === 'all') {
+          const categoryIds = collectAllModeCategoryIds(gatherListSnapshotsForDiff());
+          allModeDiff = computeAllModeDiff(
+            allProblems.map((p) => p.id),
+            categoryIds
+          );
+          addLog(
+            `Diferențe vs. inventarul categoriilor: <b>${allModeDiff.hiddenCount}</b> probleme DOAR în scanarea completă (ascunse/fără categorie), ${allModeDiff.missingFromSweepCount} doar în inventar.`
+          );
+          if (allModeDiff.hiddenCount > 0) {
+            const sample = allModeDiff.hiddenIds.slice(0, 20).join(', ');
+            addLog(`Exemplu IDs ascunse: ${sample}${allModeDiff.hiddenCount > 20 ? '…' : ''}.`);
+          }
+        }
         addLog(
           `<u>Am terminat de extras problemele.</u> Sunt ${unsolvedCount} probleme nerezolvate. Tabelul și lista au fost adăugate mai jos.`
         );
@@ -2885,6 +3506,17 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
         savedAt: now,
         scanMode,
         idRange: scanMode === 'id-range' ? { ...config.idRange } : null,
+        allMode:
+          scanMode === 'all'
+            ? {
+                ceiling: allModeCeiling,
+                prober: allModeProber ? { ...allModeProber } : null,
+                sweepCursor: allModeCursor,
+                pendingSweepIds: Array.from(allModePending),
+                skipList: normalizeAllModeSkipList(Array.from(allModeSkipMap.values())),
+                diff: allModeDiff,
+              }
+            : null,
         pageLink,
         pagination: { ...config.pagination },
         scanStartPage: config.startPage,
@@ -2989,6 +3621,32 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           }
         }
 
+        if (scanMode === 'all' && migrated.allMode && typeof migrated.allMode === 'object') {
+          const am = migrated.allMode;
+          allModeCeiling = Number.isFinite(am.ceiling) ? am.ceiling : null;
+          allModeProber = am.prober
+            ? { ...am.prober }
+            : createAllModeProber({ startId: config.startPage });
+          allModeCursor = Number.isFinite(am.sweepCursor)
+            ? Math.max(1, Math.trunc(am.sweepCursor))
+            : Math.max(1, config.startPage);
+          allModeDiff = am.diff || null;
+          allModePending.clear();
+          allModeDispatched.clear();
+          allModeSkipMap.clear();
+          // Rebuild the dispatched set: every captured problem and every
+          // permanently skipped ID is settled; transient skips are retried.
+          for (const id of seenProblemIds) allModeDispatched.add(id);
+          for (const entry of am.skipList) {
+            allModeSkipMap.set(entry.id, entry);
+            if (isAllModeSkipEntry(entry)) allModeDispatched.add(entry.id);
+          }
+          for (const id of am.pendingSweepIds) {
+            allModeDispatched.add(id);
+            allModePending.add(id);
+          }
+        }
+
         if (Number.isFinite(migrated.scanStartPage)) config.startPage = migrated.scanStartPage;
 
         const elapsed = Number.isFinite(migrated.elapsedMs) ? migrated.elapsedMs : null;
@@ -3078,7 +3736,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           nextSequentialPage = migrated.resumeFromPage;
         }
 
-        if (Array.isArray(migrated.inFlightPages)) {
+        if (Array.isArray(migrated.inFlightPages) && scanMode !== 'all') {
           for (const pageIndex of migrated.inFlightPages) deferPage(pageIndex, 0);
         }
 
@@ -3381,6 +4039,10 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
     }
 
     function kick() {
+      if (scanMode === 'all') {
+        allModeKick();
+        return;
+      }
       if (finished || paused) return;
       if (inFlight >= getEffectiveConcurrency()) return;
 
@@ -3442,7 +4104,18 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
 
     function fetchPage(pageIndex, retryCount = 0) {
       if (finished || stopRequested) return;
-      if (paused) {
+      if (scanMode === 'all') {
+        const pendingRetry = allModeRetryTimers.get(pageIndex);
+        if (pendingRetry) {
+          clearTimeout(pendingRetry);
+          allModeRetryTimers.delete(pageIndex);
+        }
+        if (paused) {
+          // Mode "all" never uses the deferred map; the ID stays pending and
+          // allModeKick re-drives it after resume.
+          return;
+        }
+      } else if (paused) {
         deferPage(pageIndex, retryCount);
         return;
       }
@@ -3477,6 +4150,10 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       }
 
       if (inFlight >= getEffectiveConcurrency()) {
+        if (scanMode === 'all') {
+          // Lane full: leave the ID pending; allModeKick re-drives it later.
+          return;
+        }
         deferPage(pageIndex, retryCount);
         return;
       }
@@ -3503,18 +4180,18 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
       const effectivePageSize = Number.isFinite(pageSize) ? pageSize : 10;
       const startOffset = scanMode === 'list' ? effectivePageSize * (pageIndex - 1) : null;
       const url =
-        scanMode === 'id-range'
-          ? new URL(
-              `/probleme/${pageIndex}`,
-              location?.origin || 'https://www.pbinfo.ro'
-            ).toString()
-          : buildPageUrl(pageLink, {
+        scanMode === 'list'
+          ? buildPageUrl(pageLink, {
               pageIndex,
               pageSize: effectivePageSize,
               mode: config.pagination.mode,
               param: config.pagination.param,
               pageBase: config.pagination.pageBase,
-            });
+            })
+          : new URL(
+              `/probleme/${pageIndex}`,
+              location?.origin || 'https://www.pbinfo.ro'
+            ).toString();
       fetch(url, {
         method: 'GET',
         signal: controller.signal,
@@ -3537,10 +4214,17 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
                 `Serverul a răspuns cu o pagină de verificare (probabil protecție anti-bot) la ${unitLabel}. Reîncerc în ${getRetryDelayLabel(delay)}...`
               );
               finalize();
-              setTimeout(() => fetchPage(pageIndex, retryCount + 1), delay);
+              if (scanMode === 'all') allModeDeferRetry(pageIndex, retryCount, delay);
+              else setTimeout(() => fetchPage(pageIndex, retryCount + 1), delay);
               return;
             }
             finalize();
+            if (scanMode === 'all') {
+              allModeRecordSkip(pageIndex, 'transient', 'blocked');
+              allModeSettleSweep(pageIndex);
+              schedule(kick);
+              return;
+            }
             finishScan({
               complete: false,
               reason: `Blocare detectată la ${unitLabel} (posibil Cloudflare). Încearcă delay mai mare și/sau concurență mai mică.`,
@@ -3549,14 +4233,18 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           }
 
           if (
-            scanMode === 'id-range' &&
+            (scanMode === 'id-range' || scanMode === 'all') &&
             (responseStatus === 404 || isLikelyPbinfoNotFoundHtml(responseText))
           ) {
             stats.pages++;
             stats.missing++;
             idRangeConsecutiveMissing++;
+            if (scanMode === 'all') {
+              allModeRecordSkip(pageIndex, 'dead', 'not-found');
+            }
             maybeAutoSave('id');
             if (
+              scanMode === 'id-range' &&
               config.idRange.stopAfterMissing > 0 &&
               idRangeConsecutiveMissing >= config.idRange.stopAfterMissing
             ) {
@@ -3575,12 +4263,16 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
                 `ID ${pageIndex}: progres (${stats.pages} scanate) · găsite ${stats.total} · 404 ${stats.missing}${forbiddenSuffix}.`
               );
             }
+            if (scanMode === 'all') allModeSettleSweep(pageIndex);
             finalize();
             schedule(kick);
             return;
           }
 
-          if (scanMode === 'id-range' && (responseStatus === 401 || responseStatus === 403)) {
+          if (
+            (scanMode === 'id-range' || scanMode === 'all') &&
+            (responseStatus === 401 || responseStatus === 403)
+          ) {
             stats.pages++;
             stats.forbidden++;
             idRangeConsecutiveMissing = 0;
@@ -3597,7 +4289,41 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
               knownIdRangeScore != null && Number.isFinite(knownIdRangeScore)
                 ? knownIdRangeScore
                 : null;
-            if (scoreValue != null && !seenProblemIds.has(pageIndex)) {
+            if (scanMode === 'all') {
+              // Mode "all" captures every live problem: a 401/403 problem
+              // exists but is access-restricted (cookie-shell), so it is both
+              // captured (score may be unknown) and recorded on the skip-list.
+              allModeRecordSkip(pageIndex, 'cookie-shell', 'forbidden');
+              allModeProber = applyAllModeProbeOutcome(allModeProber, pageIndex, 'live');
+              if (!seenProblemIds.has(pageIndex)) {
+                seenProblemIds.add(pageIndex);
+                const scoreKnown = scoreValue != null;
+                allProblems.push({
+                  cnt: allProblems.length + 1,
+                  id: pageIndex,
+                  name: '',
+                  link: new URL(
+                    `/probleme/${pageIndex}`,
+                    location?.origin || 'https://www.pbinfo.ro'
+                  ).toString(),
+                  difficulty: 3,
+                  score: scoreKnown ? scoreValue : -1,
+                  scoreKnown,
+                  userScore: scoreValue,
+                  maxScore: 100,
+                  status: scoreKnown ? (scoreValue >= 100 ? 'solved' : 'tried') : 'unattempted',
+                  postedBy_link: '',
+                  postedBy_name: '',
+                  postedBy_img: '',
+                  author: '',
+                  source: '',
+                });
+                if (!scoreKnown) stats.unattempted++;
+                else if (scoreValue >= 100) stats.solved++;
+                else stats.tried++;
+                stats.total++;
+              }
+            } else if (scoreValue != null && !seenProblemIds.has(pageIndex)) {
               seenProblemIds.add(pageIndex);
               allProblems.push({
                 cnt: allProblems.length + 1,
@@ -3624,6 +4350,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
               stats.total++;
             }
 
+            if (scanMode === 'all') allModeSettleSweep(pageIndex);
             finalize();
             schedule(kick);
             return;
@@ -3637,10 +4364,17 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
                 `Eroare la ${unitLabel} (status ${responseStatus}). Reîncerc în ${getRetryDelayLabel(delay)}...`
               );
               finalize();
-              setTimeout(() => fetchPage(pageIndex, retryCount + 1), delay);
+              if (scanMode === 'all') allModeDeferRetry(pageIndex, retryCount, delay);
+              else setTimeout(() => fetchPage(pageIndex, retryCount + 1), delay);
               return;
             }
             finalize();
+            if (scanMode === 'all') {
+              allModeRecordSkip(pageIndex, 'transient', `http-${responseStatus}`);
+              allModeSettleSweep(pageIndex);
+              schedule(kick);
+              return;
+            }
             finishScan({
               complete: false,
               reason: `Eroare la ${unitLabel} (status ${responseStatus})`,
@@ -3656,10 +4390,17 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
                 `Serverul a răspuns cu "Invalid request" la ${unitLabel}. Reîncerc în ${getRetryDelayLabel(delay)}...`
               );
               finalize();
-              setTimeout(() => fetchPage(pageIndex, retryCount + 1), delay);
+              if (scanMode === 'all') allModeDeferRetry(pageIndex, retryCount, delay);
+              else setTimeout(() => fetchPage(pageIndex, retryCount + 1), delay);
               return;
             }
             finalize();
+            if (scanMode === 'all') {
+              allModeRecordSkip(pageIndex, 'transient', 'invalid-request');
+              allModeSettleSweep(pageIndex);
+              schedule(kick);
+              return;
+            }
             finishScan({
               complete: false,
               reason: `Serverul a răspuns cu "Invalid request" la ${unitLabel}`,
@@ -3667,7 +4408,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
             return;
           }
 
-          if (scanMode === 'id-range') {
+          if (scanMode === 'id-range' || scanMode === 'all') {
             stats.pages++;
             idRangeConsecutiveMissing = 0;
 
@@ -3692,6 +4433,33 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
               (rawScoreInfo.userScore == null || !Number.isFinite(rawScoreInfo.userScore))
                 ? { ...rawScoreInfo, userScore: knownIdRangeScore, maxScore: 100 }
                 : rawScoreInfo;
+
+            if (scanMode === 'all') {
+              const hasScoreCell = Boolean(pageDoc.querySelector('#scor_utilizator_problema'));
+              const shellOutcome = classifyAllModeFetchOutcome({
+                status: responseStatus,
+                blocked: false,
+                notFound: false,
+                hasProblemShell: hasScoreCell || Boolean(meta.name),
+              });
+              if (shellOutcome.kind !== 'live') {
+                // 200 OK but the page is not a problem shell (e.g. a
+                // not-logged-in shell): classify, skip, do not capture.
+                allModeRecordSkip(pageIndex, 'cookie-shell', shellOutcome.reason);
+                if (stats.pages > 0 && stats.pages % idRangeLogEvery === 0) {
+                  const forbiddenSuffix = stats.forbidden > 0 ? ` · 403 ${stats.forbidden}` : '';
+                  addLog(
+                    `ID ${pageIndex}: progres (${stats.pages} scanate) · găsite ${stats.total} · 404 ${stats.missing}${forbiddenSuffix}.`
+                  );
+                }
+                allModeSettleSweep(pageIndex);
+                maybeAutoSave('id');
+                finalize();
+                schedule(kick);
+                return;
+              }
+            }
+
             const status = classifyProblemStatus(scoreInfo);
 
             if (!pageDoc.querySelector('#scor_utilizator_problema') && !idRangeWarnedAboutScore) {
@@ -3730,6 +4498,13 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
               else stats.unattempted++;
               stats.total++;
 
+              if (scanMode === 'all') {
+                // Live capture clears any stale transient skip entry and
+                // feeds the ceiling prober (the ID is proven live).
+                allModeSkipMap.delete(pageIndex);
+                allModeProber = applyAllModeProbeOutcome(allModeProber, pageIndex, 'live');
+              }
+
               if (
                 shouldDebugDump(pageIndex) &&
                 (scoreInfo.candidates.length === 0 || status === 'unattempted')
@@ -3761,6 +4536,7 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
             maybeAutoSave('id');
             maybeLiveRender();
             noteAdaptiveSuccess();
+            if (scanMode === 'all') allModeSettleSweep(pageIndex);
             finalize();
             schedule(kick);
             return;
@@ -3984,7 +4760,15 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
                 `Eroare de rețea la ${unitLabel}. Reîncerc în ${getRetryDelayLabel(delay)}...`
               );
             }
-            setTimeout(() => fetchPage(pageIndex, retryCount + 1), delay);
+            if (scanMode === 'all') allModeDeferRetry(pageIndex, retryCount, delay);
+            else setTimeout(() => fetchPage(pageIndex, retryCount + 1), delay);
+            return;
+          }
+
+          if (scanMode === 'all') {
+            allModeRecordSkip(pageIndex, 'transient', timeoutTriggered ? 'timeout' : 'network');
+            allModeSettleSweep(pageIndex);
+            schedule(kick);
             return;
           }
 
@@ -4014,6 +4798,14 @@ if (typeof window === 'undefined' || typeof document === 'undefined') {
           );
         }
         initQueueFromTotalPages();
+      } else if (scanMode === 'all') {
+        if (getEffectiveDelayMs() === 0 && getEffectiveConcurrency() > 1) {
+          addLog(
+            '<span style="color:#b35c00;"><b>Recomandare:</b> pentru scanarea completă, setează PBINFO_GET_UNSOLVED_DELAY_MS (ex: 150) și concurență mică (1-2), ca să eviți blocarea.</span>'
+          );
+        }
+        for (let i = 0; i < getEffectiveConcurrency(); i++) schedule(kick);
+        return;
       }
       fetchPage(config.startPage, 0);
     }
