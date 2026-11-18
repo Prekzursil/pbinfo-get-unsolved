@@ -1,7 +1,7 @@
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: '/'
+    directory: "/"
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
@@ -9,13 +9,13 @@ updates:
       minor-patch:
         applies-to: version-updates
         patterns:
-          - '*'
+          - "*"
         update-types:
           - patch
           - minor
       security-updates:
         applies-to: security-updates
         patterns:
-          - '*'
+          - "*"
     labels:
       - dependencies
