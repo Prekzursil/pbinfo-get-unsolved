@@ -12,11 +12,11 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "eslint": "^10.14.0",
+    "eslint": "^10.15.0",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.14.0",
     "linkedom": "^0.18.15",
-    "prettier": "^3.9.10",
+    "prettier": "^3.10.1",
     "terser": "^5.51.2"
   },
   "overrides": {
